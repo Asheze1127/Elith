@@ -92,7 +92,7 @@ ELITH LOCK: FDE Challenge 2026-06 の課題に対する設計メモ。
 ### 開発ステップ（MVPアプローチ）
 
 1. 標準RAGを設計・実装（取り込み→検索→引用付き回答→根拠不足の非断定）
-2. 3社要望を構造化（`feature-list.md`）
+2. 3社要望を構造化（`details/feature-list.md`）
 3. A社を選び、`tenant_config` + 必要な共通部品を実装
 4. 残り2社も踏まえ共通化判断、標準RAG側へ反映
 5. README（セットアップ / 設計判断 / GCP想定構成）と判断メモを整備
