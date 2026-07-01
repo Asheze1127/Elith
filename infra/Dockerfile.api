@@ -1,0 +1,25 @@
+# API image for the FastAPI backend.
+# Build context is ./backend (see docker-compose.yml), so paths below are
+# relative to backend/. Dependencies are installed from pyproject.toml.
+FROM python:3.11-slim
+
+# Do not buffer stdout/stderr and do not write .pyc files (cleaner container logs).
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+# Install dependencies first for better layer caching: copying only the project
+# metadata means dependency install is not invalidated by source-only changes.
+COPY pyproject.toml ./
+COPY app ./app
+COPY ingestion ./ingestion
+
+# Runtime-only install (dev extras such as pytest/ruff are intentionally excluded).
+RUN pip install --no-cache-dir .
+
+EXPOSE 8000
+
+# /health returns 200 without a DB connection, so the container is usable
+# even before migrations run.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
