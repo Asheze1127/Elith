@@ -16,7 +16,13 @@ COPY app ./app
 COPY ingestion ./ingestion
 
 # Runtime-only install (dev extras such as pytest/ruff are intentionally excluded).
+# Done as root during the build so packages land in the system site-packages.
 RUN pip install --no-cache-dir .
+
+# Drop privileges: create an unprivileged user and run uvicorn as it. Nothing
+# in the runtime phase needs root, so this shrinks the container's blast radius.
+RUN useradd -m app
+USER app
 
 EXPOSE 8000
 

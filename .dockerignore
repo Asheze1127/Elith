@@ -1,3 +1,9 @@
+# NOTE: Docker uses the .dockerignore located at the root of each build
+# context. The api/web services build with context=./backend and ./web, so
+# they read backend/.dockerignore and web/.dockerignore respectively -- NOT
+# this file. This root file only takes effect when building with the
+# repository root as the build context (e.g. `docker build .`).
+#
 # Keep build contexts small and avoid leaking local artifacts/secrets.
 .git
 .gitignore

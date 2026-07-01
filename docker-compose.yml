@@ -6,18 +6,25 @@
 #   docker compose up -d api       # start the API (curl localhost:8000/health -> 200)
 #
 # NOTE: the `web` service depends on the web/ Next.js app created in #13 (FE-01).
-# Until then `docker compose build web` / `up web` will fail (no web/ source).
-# Bring up db/api only for local verification.
+# It is guarded by the `web` profile, so the default `docker compose up` brings
+# up db/api only. After #13 lands, run `docker compose --profile web up` for all
+# three services.
+#
+# Host ports are overridable via env vars (ELITH_DB_PORT / ELITH_API_PORT /
+# ELITH_WEB_PORT) to avoid collisions with other local services.
 
 services:
   db:
     image: pgvector/pgvector:pg16
     environment:
+      # Local-verification-only dummy credentials. Production uses Cloud SQL
+      # with Secret Manager -- never reuse these values outside local dev.
       POSTGRES_USER: elith
       POSTGRES_PASSWORD: elith
       POSTGRES_DB: elith
     ports:
-      - "5432:5432"
+      # Bind to loopback only to reduce the exposed surface of the local DB.
+      - "127.0.0.1:${ELITH_DB_PORT:-5432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
       # Runs on first init only: enables the pgvector extension.
@@ -39,18 +46,22 @@ services:
       # Passed through from the host env; empty falls back to the mock provider.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     ports:
-      - "8000:8000"
+      - "${ELITH_API_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
 
   # NOTE: build fails until #13 (FE-01) adds the web/ Next.js app.
+  # Guarded by the `web` profile so it is skipped by the default
+  # `docker compose up`. After #13: `docker compose --profile web up`.
+  # #13 MUST also add web/.dockerignore (exclude node_modules/, .next/, .env).
   web:
+    profiles: ["web"]
     build:
       context: ./web
       dockerfile: ../infra/Dockerfile.web
     ports:
-      - "3000:3000"
+      - "${ELITH_WEB_PORT:-3000}:3000"
     depends_on:
       - api
 
