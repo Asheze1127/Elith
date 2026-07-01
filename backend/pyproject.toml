@@ -30,8 +30,11 @@ dev = [
     "pytest-asyncio",
 ]
 
-[tool.setuptools]
-packages = ["app", "ingestion"]
+# Auto-discover packages so subpackages (app.api/app.core) are included in a
+# non-editable install (Docker/prod). A flat list omitted them -> ModuleNotFoundError.
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "ingestion*"]
 
 [tool.ruff]
 line-length = 100
