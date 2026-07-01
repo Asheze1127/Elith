@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elith-backend"
+version = "0.1.0"
+description = "Elith RAG backend (config-driven multi-tenant RAG chat platform)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    # SQLAlchemy 2.0 style ORM (used by core/db.py in this issue)
+    "sqlalchemy>=2",
+    # alembic / pgvector are declared ahead of use as the foundation for #3
+    # (DB migrations & vector column). Kept here so #3/#4/#5 need not edit pyproject.
+    "alembic",
+    "psycopg[binary]",
+    "pgvector",
+    # multipart is required by FastAPI for future file-upload endpoints (#4 documents)
+    "python-multipart",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",
+    "ruff",
+    "pytest-asyncio",
+]
+
+[tool.setuptools]
+packages = ["app", "ingestion"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
