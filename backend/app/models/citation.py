@@ -38,6 +38,13 @@ class Citation(TimestampMixin, Base):
     )
     # Nullable: cite a specific chunk when available; SET NULL keeps the citation
     # (with its snapshot snippet) if the chunk/document is later deleted.
+    #
+    # Same-tenant invariant: the referenced chunk / document MUST belong to the
+    # same tenant as this citation's answer, i.e. chunk.tenant_id ==
+    # answer.tenant_id and document.tenant_id == answer.tenant_id. Citation carries
+    # no tenant_id of its own -- it is scoped through its answer by design (see the
+    # module docstring) -- so the DB cannot enforce this. The repository /
+    # generation layer MUST verify the same-tenant match before writing.
     chunk_id: Mapped[int | None] = mapped_column(
         ForeignKey("chunk.id", ondelete="SET NULL"),
         nullable=True,

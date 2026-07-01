@@ -33,6 +33,14 @@ class Document(TimestampMixin, Base):
         index=True,
     )
     # Nullable: a document may be tenant-wide rather than scoped to one workspace.
+    #
+    # Same-tenant invariant: when set, the referenced workspace MUST belong to the
+    # same tenant, i.e. document.tenant_id == workspace.tenant_id. A single-column
+    # FK cannot enforce this at the DB level (a composite FK would, but SET NULL on
+    # workspace_id would then asymmetrically clear only part of the pair, so we do
+    # not introduce one here). The repository / generation layer MUST verify the
+    # match before writing, upholding the "no reaching into other tenants"
+    # guarantee (permission-design.md section 3).
     workspace_id: Mapped[int | None] = mapped_column(
         ForeignKey("workspace.id", ondelete="SET NULL"),
         nullable=True,

@@ -150,6 +150,8 @@ def downgrade() -> None:
     op.drop_table('answer')
     op.drop_table('tenant')
     # ### end Alembic commands ###
-    # Mirror the upgrade. Guard with IF EXISTS so downgrade is safe even if the
-    # extension was already removed or is shared with other schemas.
+    # Mirror the upgrade. This assumes a single-purpose DB: IF EXISTS only guards
+    # the "already removed" case -- it does NOT protect an extension that is still
+    # in use. On a shared DB the vector extension is a shared resource that other
+    # features may depend on, so dropping it here could unexpectedly break them.
     op.execute("DROP EXTENSION IF EXISTS vector")

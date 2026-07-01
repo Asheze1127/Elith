@@ -11,10 +11,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 
 class TimestampMixin:
-    """Adds server-managed created_at / updated_at columns.
+    """Adds created_at / updated_at columns.
 
-    ``server_default``/``onupdate`` keep timestamps correct even for writes that
-    bypass the ORM (e.g. raw SQL in migrations or ingestion jobs).
+    ``server_default`` makes the DB fill the initial value at INSERT time, so
+    created_at is set even for rows inserted via raw SQL.
+
+    ``onupdate`` is NOT a DB trigger: it is applied only when SQLAlchemy flushes
+    an UPDATE. An UPDATE issued via raw SQL (migrations, manual queries, or other
+    tools) will therefore NOT refresh updated_at automatically -- the caller must
+    set it explicitly in that case.
     """
 
     created_at: Mapped[datetime] = mapped_column(
