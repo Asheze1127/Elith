@@ -50,6 +50,23 @@ def test_factory_uses_mock_when_not_local_even_with_key() -> None:
     assert isinstance(get_llm_provider(settings), MockLLMProvider)
 
 
+def test_factory_falls_back_to_mock_with_whitespace_only_key() -> None:
+    # A whitespace-only key must not select Gemini (would fail later with an
+    # opaque auth error); the factory falls back to the mock instead.
+    settings = _settings("local", "   ")
+    assert isinstance(get_embedding_provider(settings), MockEmbeddingProvider)
+    assert isinstance(get_llm_provider(settings), MockLLMProvider)
+
+
+@pytest.mark.parametrize("environment", ["LOCAL", "Local", " local "])
+def test_factory_environment_compare_is_case_and_space_insensitive(
+    environment: str,
+) -> None:
+    settings = _settings(environment, "fake-key")
+    assert isinstance(get_embedding_provider(settings), GeminiEmbeddingProvider)
+    assert isinstance(get_llm_provider(settings), GeminiLLMProvider)
+
+
 # --- mock behavior -------------------------------------------------------
 
 
@@ -173,6 +190,35 @@ def test_gemini_generate_uses_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
     assert provider.generate("prompt") == "generated answer"
 
 
+def test_gemini_generate_wraps_text_property_valueerror(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The real SDK's response.text is a property that raises ValueError when the
+    # model returned no usable candidate (safety filter / non-STOP finish_reason).
+    # generate() must wrap that in GeminiError, not leak the raw ValueError.
+    fake = types.ModuleType("google.generativeai")
+    fake.configure = lambda api_key: None
+
+    class FakeResponse:
+        @property
+        def text(self) -> str:
+            raise ValueError("blocked by safety filter; finish_reason=SAFETY")
+
+    class FakeModel:
+        def __init__(self, model: str) -> None:
+            pass
+
+        def generate_content(self, prompt: str) -> FakeResponse:
+            return FakeResponse()
+
+    fake.GenerativeModel = FakeModel
+    _install_fake_genai(monkeypatch, fake)
+
+    provider = GeminiLLMProvider("fake-key")
+    with pytest.raises(GeminiError):
+        provider.generate("prompt")
+
+
 def test_gemini_generate_wraps_sdk_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = types.ModuleType("google.generativeai")
     fake.configure = lambda api_key: None
@@ -192,8 +238,10 @@ def test_gemini_generate_wraps_sdk_errors(monkeypatch: pytest.MonkeyPatch) -> No
         provider.generate("prompt")
 
 
-def test_gemini_provider_requires_key() -> None:
+@pytest.mark.parametrize("api_key", ["", "   "])
+def test_gemini_provider_requires_key(api_key: str) -> None:
+    # Empty and whitespace-only keys are both rejected at construction.
     with pytest.raises(GeminiError):
-        GeminiEmbeddingProvider("")
+        GeminiEmbeddingProvider(api_key)
     with pytest.raises(GeminiError):
-        GeminiLLMProvider("")
+        GeminiLLMProvider(api_key)

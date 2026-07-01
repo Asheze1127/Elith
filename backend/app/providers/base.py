@@ -32,5 +32,11 @@ class LLMProvider(ABC):
 
     @abstractmethod
     def generate(self, prompt: str, **opts: object) -> str:
-        """Generate a completion for ``prompt``; extra opts are provider-specific."""
+        """Generate a completion for ``prompt``.
+
+        Note: ``opts`` is currently unsupported and ignored by every
+        implementation (future work will map it onto the provider's
+        generation_config); it is part of the signature so callers can start
+        passing options without a later interface break.
+        """
         raise NotImplementedError

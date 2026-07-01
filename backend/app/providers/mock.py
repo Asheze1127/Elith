@@ -49,7 +49,4 @@ class MockLLMProvider(LLMProvider):
     def generate(self, prompt: str, **opts: object) -> str:
         # Citation-shaped so downstream cite/ground_check steps have something to
         # parse without a real model. Not semantically meaningful.
-        return (
-            "これはモック応答です。実際のLLMは呼び出していません。"
-            "根拠: [1] mock-source"
-        )
+        return "これはモック応答です。実際のLLMは呼び出していません。根拠: [1] mock-source"

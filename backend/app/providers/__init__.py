@@ -12,7 +12,10 @@ from app.providers.mock import MockEmbeddingProvider, MockLLMProvider
 
 def _use_gemini(settings: Settings) -> bool:
     """True only when local environment has a Gemini key configured."""
-    return settings.ENVIRONMENT == "local" and bool(settings.GEMINI_API_KEY)
+    # strip() so a whitespace-only key ('   ') falls back to mock instead of
+    # picking Gemini and failing later with an opaque auth error; case-insensitive
+    # ENVIRONMENT compare so 'LOCAL'/'Local' behave like 'local'.
+    return settings.ENVIRONMENT.strip().lower() == "local" and bool(settings.GEMINI_API_KEY.strip())
 
 
 def get_embedding_provider(settings: Settings | None = None) -> EmbeddingProvider:

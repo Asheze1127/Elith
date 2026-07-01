@@ -4,6 +4,13 @@ Selected by the factory when ENVIRONMENT=local and GEMINI_API_KEY is set. The
 SDK is imported lazily inside methods so that importing this module (and running
 mock-only tests) never requires the SDK or a network. Callers must go through
 the EmbeddingProvider / LLMProvider interfaces, not the SDK directly.
+
+NOTE: google-generativeai is the officially deprecated (EOL) Gemini SDK; it is
+adopted here as an interim measure because the successor google-genai cannot be
+validated against the real API in this environment (blind migration is risky).
+Because everything runs behind the EmbeddingProvider / LLMProvider abstraction,
+swapping to google-genai stays contained to this module. The migration is
+deferred to a separate issue.
 """
 
 from app.providers.base import EMBEDDING_DIM, EmbeddingProvider, LLMProvider
@@ -33,12 +40,14 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
     """Embeds text via Gemini text-embedding-004 (768-dim)."""
 
     def __init__(self, api_key: str) -> None:
-        if not api_key:
+        if not api_key.strip():
             raise GeminiError("GEMINI_API_KEY is required for the Gemini provider")
-        self._api_key = api_key
+        # Configure the SDK once at construction; genai.configure sets a process
+        # -wide client, so re-configuring per request only wastes calls.
+        self._genai = _configure(api_key)
 
     def _embed(self, text: str, task_type: str) -> list[float]:
-        genai = _configure(self._api_key)
+        genai = self._genai
         try:
             result = genai.embed_content(
                 model=_EMBEDDING_MODEL,
@@ -65,18 +74,27 @@ class GeminiLLMProvider(LLMProvider):
     """Generates text via a Gemini free-tier model."""
 
     def __init__(self, api_key: str) -> None:
-        if not api_key:
+        if not api_key.strip():
             raise GeminiError("GEMINI_API_KEY is required for the Gemini provider")
-        self._api_key = api_key
+        # Configure the SDK once at construction; genai.configure sets a process
+        # -wide client, so re-configuring per request only wastes calls.
+        self._genai = _configure(api_key)
 
     def generate(self, prompt: str, **opts: object) -> str:
-        genai = _configure(self._api_key)
+        # NOTE: **opts is accepted to satisfy the LLMProvider contract but is
+        # currently ignored (not mapped onto the SDK's generation_config yet).
+        genai = self._genai
         try:
             model = genai.GenerativeModel(_GENERATION_MODEL)
             response = model.generate_content(prompt)
-        except Exception as exc:  # SDK raises varied network/auth errors
-            raise GeminiError(f"Gemini generation request failed: {exc}") from exc
-        text = getattr(response, "text", None)
+            # response.text is a property that raises ValueError when the model
+            # returned no usable candidate (e.g. blocked by a safety filter or a
+            # non-STOP finish_reason). Read it inside the try so that error is
+            # wrapped in GeminiError with an understandable message rather than
+            # surfacing as a raw ValueError.
+            text = getattr(response, "text", None)
+        except Exception as exc:  # SDK raises varied network/auth/safety errors
+            raise GeminiError(f"Geminiが安全性フィルタ等で応答を返しませんでした: {exc}") from exc
         if not text:
             raise GeminiError("Gemini returned an empty generation response")
         return text
