@@ -84,17 +84,25 @@ class GeminiLLMProvider(LLMProvider):
         # NOTE: **opts is accepted to satisfy the LLMProvider contract but is
         # currently ignored (not mapped onto the SDK's generation_config yet).
         genai = self._genai
+        # Keep the transport call and the response-parsing in separate try blocks
+        # so a network/auth failure is not mislabeled as a safety-filter block.
         try:
             model = genai.GenerativeModel(_GENERATION_MODEL)
             response = model.generate_content(prompt)
+        except Exception as exc:  # SDK raises varied network/auth errors
+            raise GeminiError(f"Gemini generation request failed: {exc}") from exc
+        try:
             # response.text is a property that raises ValueError when the model
             # returned no usable candidate (e.g. blocked by a safety filter or a
-            # non-STOP finish_reason). Read it inside the try so that error is
-            # wrapped in GeminiError with an understandable message rather than
-            # surfacing as a raw ValueError.
-            text = getattr(response, "text", None)
-        except Exception as exc:  # SDK raises varied network/auth/safety errors
-            raise GeminiError(f"Geminiが安全性フィルタ等で応答を返しませんでした: {exc}") from exc
+            # non-STOP finish_reason). Read it in its own try so a blocked/empty
+            # response is reported clearly and is not confused with the transport
+            # failure handled above.
+            text = response.text
+        except Exception as exc:
+            raise GeminiError(
+                f"Gemini returned no usable response "
+                f"(safety filter or non-STOP finish_reason): {exc}"
+            ) from exc
         if not text:
             raise GeminiError("Gemini returned an empty generation response")
         return text
