@@ -128,4 +128,39 @@ describe("ChatContainer", () => {
     expect(screen.getByLabelText("引用").textContent).toContain("請求処理FAQ");
     expect(screen.getByLabelText("引用").textContent).toContain("2026-01-02");
   });
+
+  it("renders status and warnings from the chat response", async () => {
+    vi.mocked(getTenantConfig).mockResolvedValue(sampleConfig);
+    vi.mocked(sendChatMessage).mockResolvedValue({
+      answer: "確認が必要な回答です。",
+      citations: [],
+      status: "needs_review",
+      warnings: [
+        {
+          type: "stale_sources",
+          message: "古い資料を参照しています。",
+        },
+      ],
+    });
+
+    render(
+      <TenantConfigProvider>
+        <ChatContainer />
+      </TenantConfigProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "東雲ビジネスサポート" });
+    fireEvent.change(screen.getByLabelText("質問"), {
+      target: { value: "請求処理" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "送信" }));
+
+    expect(await screen.findByLabelText("回答ステータス")).toBeTruthy();
+    expect(screen.getByLabelText("回答ステータス").textContent).toBe(
+      "確認が必要",
+    );
+    expect(screen.getByLabelText("警告").textContent).toContain(
+      "古い資料を参照しています。",
+    );
+  });
 });

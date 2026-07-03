@@ -6,6 +6,8 @@ import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { AnswerMessage } from "@/components/presentational/AnswerMessage";
 import { ChatComposer } from "@/components/presentational/ChatComposer";
 import { CitationPanel } from "@/components/presentational/CitationPanel";
+import { StatusBadge } from "@/components/presentational/StatusBadge";
+import { WarningList } from "@/components/presentational/WarningList";
 
 export function ChatContainer() {
   const { config, isLoading, error: configError } = useTenantConfig();
@@ -60,6 +62,10 @@ export function ChatContainer() {
         ) : null}
         {response ? (
           <>
+            <div className="answer-toolbar">
+              <StatusBadge status={response.status} />
+            </div>
+            <WarningList warnings={response.warnings} />
             <AnswerMessage response={response} />
             {config.answer.citation === "required" ||
             response.citations.length > 0 ? (
