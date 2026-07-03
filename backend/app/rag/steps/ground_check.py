@@ -25,11 +25,16 @@ process-flow.md draws a line between two outcomes that are easy to conflate:
   an escalation/contact path -- a stronger, distinct outcome from §5.1's
   "some material, but weak" case.
 
-This step maps those onto the two different constants in ``app.models.answer``:
-``chunk_count == 0`` -> ``STATUS_NO_DATA`` (exactly the §5.2 case -- there is
-nothing at all to ground an answer in), and
-``0 < chunk_count < MIN_GROUNDING_CHUNKS`` -> ``STATUS_NEEDS_REVIEW`` (the
-§5.1 case this step's threshold heuristic exists to catch).
+This step maps those onto ``app.models.answer``'s constants -- but only the
+zero-chunk case is hardcoded to ``STATUS_NO_DATA`` (exactly the §5.2 case --
+there is nothing at all to ground an answer in, and no tenant_config field
+names this outcome). The "some but too few" (§5.1) case is data, not code:
+``multi-tenant-design.md`` §3's sample tenant_config literally has an
+``answer.low_confidence_action`` field ("根拠が弱い→断定せず「確認が必要」"),
+so ``0 < chunk_count < MIN_GROUNDING_CHUNKS`` uses whatever status string the
+tenant configured there (defaulting to ``STATUS_NEEDS_REVIEW`` if the field
+or the whole ``answer`` section is missing/malformed -- config is unvalidated
+JSONB, mirroring ``app.rag.prompt``'s defensive shape handling).
 
 Threshold reasoning (``MIN_GROUNDING_CHUNKS``)
 -----------------------------------------------
@@ -103,19 +108,44 @@ def ground_check(state: PipelineState, config: dict) -> PipelineState:
     this step (see the issue's DoD). See the module docstring for the
     zero-vs-few-chunks status mapping and the "never loosen" rule.
     """
+    answer_cfg = config.get("answer")
+    # multi-tenant-design.md §3's sample tenant_config literally names the
+    # weak-grounding status as data: `answer.low_confidence_action`. This is
+    # the customer difference this step must read, not hardcode (the
+    # "differences are data, not code" principle) -- a tenant could set this
+    # to something other than "needs_review". config is unvalidated JSONB
+    # (mirrors app.rag.prompt's defensive shape handling), so a missing/
+    # malformed "answer" section falls back to the same default this step
+    # used before this field was wired in.
+    low_confidence_status = (
+        answer_cfg.get("low_confidence_action", STATUS_NEEDS_REVIEW)
+        if isinstance(answer_cfg, dict)
+        else STATUS_NEEDS_REVIEW
+    )
+
     chunk_count = len(state.chunks)
     if chunk_count == 0:
-        # process-flow.md §5.2: zero hits at all -> "no data", not merely "weak".
+        # process-flow.md §5.2: zero hits at all -> "no data", not merely
+        # "weak". Not config-driven: there is no tenant_config field for
+        # this outcome, unlike the weak-grounding case below.
         candidate_status = STATUS_NO_DATA
     elif chunk_count < MIN_GROUNDING_CHUNKS:
-        # process-flow.md §5.1: some material, but too thin to trust.
-        candidate_status = STATUS_NEEDS_REVIEW
+        # process-flow.md §5.1: some material, but too thin to trust --
+        # what to do about it is the tenant's own configured action.
+        candidate_status = low_confidence_status
     else:
         # Enough chunks: this step has no signal to make the outcome worse.
         candidate_status = STATUS_ANSWERED
 
     current_severity = _STATUS_SEVERITY.get(state.status, _UNKNOWN_STATUS_SEVERITY)
-    candidate_severity = _STATUS_SEVERITY[candidate_status]
+    # candidate_status may be a value this module doesn't recognize (a tenant
+    # can set low_confidence_action to any string); treat an unrecognized
+    # candidate as at least STATUS_NEEDS_REVIEW's severity rather than
+    # silently skipping it as "no signal" -- the tenant explicitly configured
+    # it to fire on weak grounding, so it must never be a no-op.
+    candidate_severity = _STATUS_SEVERITY.get(
+        candidate_status, _STATUS_SEVERITY[STATUS_NEEDS_REVIEW]
+    )
     if candidate_severity <= current_severity:
         # Tighten-only: never loosen a status a prior step already set worse
         # (including a no-op where the candidate matches the current status).

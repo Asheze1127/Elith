@@ -57,10 +57,35 @@ def test_ground_check_zero_chunks_sets_no_data() -> None:
 def test_ground_check_few_chunks_sets_needs_review() -> None:
     # Below MIN_GROUNDING_CHUNKS (2): some material exists, but a single,
     # uncorroborated chunk is exactly process-flow.md §5.1's "根拠不足" case.
+    # Empty config -> falls back to the default STATUS_NEEDS_REVIEW (see the
+    # next test for the config-driven case).
     assert MIN_GROUNDING_CHUNKS == 2
     state = PipelineState(chunks=[_make_chunk()])
 
     result = ground_check(state, {})
+
+    assert result.status == STATUS_NEEDS_REVIEW
+
+
+def test_ground_check_weak_grounding_uses_configured_low_confidence_action() -> None:
+    # multi-tenant-design.md §3: "low_confidence_action" is tenant_config
+    # DATA, not a hardcoded outcome -- a tenant can set it to any status
+    # string, and this step must use exactly that value for the "some but
+    # too few chunks" case (not silently default to needs_review).
+    state = PipelineState(chunks=[_make_chunk()])
+    config = {"answer": {"low_confidence_action": "escalate_to_human"}}
+
+    result = ground_check(state, config)
+
+    assert result.status == "escalate_to_human"
+
+
+def test_ground_check_malformed_answer_config_falls_back_to_default() -> None:
+    # config is unvalidated tenant JSONB; a non-dict "answer" section must
+    # not raise, and falls back to the same default as an empty config.
+    state = PipelineState(chunks=[_make_chunk()])
+
+    result = ground_check(state, {"answer": "external"})
 
     assert result.status == STATUS_NEEDS_REVIEW
 
