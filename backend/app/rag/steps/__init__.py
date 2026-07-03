@@ -63,6 +63,7 @@ exists, but that call belongs to whoever adds the first bespoke policy.
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -205,3 +206,12 @@ def escalate_status(current_status: str, candidate_status: str) -> str:
         candidate_status, _STATUS_SEVERITY[STATUS_NEEDS_REVIEW]
     )
     return candidate_status if candidate_severity > current_severity else current_status
+
+
+def _register_builtin_steps() -> None:
+    """Import built-in step modules so their decorators populate STEPS."""
+    importlib.import_module("app.rag.steps.cite")
+    importlib.import_module("app.rag.steps.ground_check")
+
+
+_register_builtin_steps()

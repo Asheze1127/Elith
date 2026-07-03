@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from app.api import documents, health, tenant
+from app.api import chat, documents, health, tenant
 from app.core.logging import setup_logging
 
 
@@ -13,6 +13,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(documents.router)
     app.include_router(tenant.router)
+    app.include_router(chat.router)
     return app
 
 
