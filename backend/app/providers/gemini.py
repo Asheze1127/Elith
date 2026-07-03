@@ -32,7 +32,10 @@ def _configure(api_key: str) -> "object":
         import google.generativeai as genai
     except ImportError as exc:  # pragma: no cover - dependency is declared
         raise GeminiError("google-generativeai is not installed") from exc
-    genai.configure(api_key=api_key)
+    try:
+        genai.configure(api_key=api_key)
+    except Exception as exc:
+        raise GeminiError(f"Gemini SDK configuration failed: {exc}") from exc
     return genai
 
 
