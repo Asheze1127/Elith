@@ -9,6 +9,8 @@ const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
 ).replace(/\/+$/, "");
 
+const LOCAL_TENANT_ID = process.env.NEXT_PUBLIC_LOCAL_TENANT_ID?.trim();
+
 function buildUrl(path: string): string {
   return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
@@ -51,6 +53,7 @@ export async function apiRequest<T>(
       method,
       headers: {
         "Content-Type": "application/json",
+        ...(LOCAL_TENANT_ID ? { "X-Tenant-ID": LOCAL_TENANT_ID } : {}),
         ...headers,
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
