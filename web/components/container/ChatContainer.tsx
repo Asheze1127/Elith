@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useChat } from "@/hooks/useChat";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { AnswerMessage } from "@/components/presentational/AnswerMessage";
@@ -15,11 +15,6 @@ export function ChatContainer() {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState("");
 
-  useEffect(() => {
-    if (!config) return;
-    setMode(config.answer.default_mode || config.answer.modes[0] || "");
-  }, [config]);
-
   if (isLoading) {
     return <main className="chat-shell">読み込み中</main>;
   }
@@ -28,12 +23,14 @@ export function ChatContainer() {
     return <main className="chat-shell chat-shell--error">{configError}</main>;
   }
 
+  const selectedMode = mode || config.answer.default_mode || config.answer.modes[0] || "";
+
   async function handleSubmit() {
     const trimmedQuery = query.trim();
     if (!trimmedQuery) return;
     await submit({
       query: trimmedQuery,
-      mode: mode || undefined,
+      mode: selectedMode || undefined,
     });
   }
 
@@ -49,7 +46,7 @@ export function ChatContainer() {
         <ChatComposer
           config={config}
           query={query}
-          mode={mode}
+          mode={selectedMode}
           isSubmitting={isSubmitting}
           onQueryChange={setQuery}
           onModeChange={setMode}

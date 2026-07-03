@@ -76,9 +76,12 @@ describe("apiRequest", () => {
       vi.fn().mockRejectedValue(new TypeError("fetch failed")),
     );
 
-    const error: ApiRequestError = await apiRequest("/chat").catch((e) => e);
+    const error = await apiRequest("/chat").catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(ApiRequestError);
+    if (!(error instanceof ApiRequestError)) {
+      throw new Error("expected ApiRequestError");
+    }
     expect(error.status).toBeNull();
     expect(error.message).toMatch(/サーバーに接続できません/);
   });
