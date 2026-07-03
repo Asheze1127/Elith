@@ -21,6 +21,16 @@ non-local environment there is no session mechanism to fall back to, so the
 request fails clearly (501) instead of silently trusting an unauthenticated
 header as a tenant identity claim. A real session-based resolver needs its
 own future issue.
+
+CAVEAT (found in review): `Settings.ENVIRONMENT` defaults to `"local"` when
+unset (app/core/config.py), so a deployment that forgets to set ENVIRONMENT
+at all fails open -- it behaves as local and trusts the header. This mirrors
+an existing, already-accepted default elsewhere (provider selection has the
+same fail-to-mock-not-real-provider shape), but unlike provider selection,
+here it is security-relevant. Tracked as a known gap to close when real
+session-based resolution replaces this stand-in; a stricter fix would require
+an explicit non-default ENVIRONMENT in deployment config, which is out of
+this issue's scope.
 """
 
 from fastapi import Depends, Header, HTTPException, status

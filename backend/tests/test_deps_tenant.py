@@ -75,3 +75,34 @@ def test_get_tenant_config_unknown_tenant_raises_404_with_clear_message(db_sessi
         get_tenant_config(tenant_id=999_999, db=db_session)
     assert exc_info.value.status_code == 404
     assert "999999" in exc_info.value.detail
+
+
+def test_get_tenant_config_tenant_without_config_row_raises_404(db_session) -> None:
+    # A tenant can exist without ever having had a tenant_config row written
+    # (e.g. mid-onboarding); this must 404 like an unknown tenant, not 500.
+    tenant = Tenant(display_name="No Config Co.")
+    db_session.add(tenant)
+    db_session.flush()
+
+    with pytest.raises(HTTPException) as exc_info:
+        get_tenant_config(tenant_id=tenant.id, db=db_session)
+    assert exc_info.value.status_code == 404
+
+
+def test_get_tenant_config_does_not_leak_another_tenants_config(db_session) -> None:
+    # Cross-tenant isolation (permission-design.md #3): resolving tenant A's
+    # id must never return tenant B's config row, even when only B has one.
+    tenant_a = Tenant(display_name="Tenant A")
+    tenant_b = Tenant(display_name="Tenant B")
+    db_session.add_all([tenant_a, tenant_b])
+    db_session.flush()
+    db_session.add(TenantConfig(tenant_id=tenant_b.id, config={"search": {"scope": "all"}}))
+    db_session.flush()
+
+    with pytest.raises(HTTPException) as exc_info:
+        get_tenant_config(tenant_id=tenant_a.id, db=db_session)
+    assert exc_info.value.status_code == 404
+
+    # Sanity check: B's own config is still reachable via its own id.
+    result = get_tenant_config(tenant_id=tenant_b.id, db=db_session)
+    assert result.tenant_id == tenant_b.id
