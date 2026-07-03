@@ -1,16 +1,23 @@
 // DTOs for the POST /chat response (docs/details/process-flow.md §2):
 // {answer, citations, status, warnings}.
 
-// "ok" = normal answer, "needs_review" = grounding was weak (ground_check),
-// "no_data" = retrieval hit zero chunks.
-export type AnswerStatus = "ok" | "needs_review" | "no_data";
+// Built-in statuses are defined by backend/app/models/answer.py. The backend
+// intentionally stores status as tenant-config data, so future tenants may add
+// their own string statuses without a frontend schema migration.
+export type AnswerStatus =
+  | "answered"
+  | "needs_review"
+  | "no_data"
+  | (string & {});
 
 export interface Citation {
-  document_id: string;
-  title: string;
-  snippet?: string;
+  chunk_id: number | null;
+  document_id: number | null;
+  title: string | null;
+  snippet: string | null;
   // Source metadata shown when tenant_config.answer.show_source_metadata is true.
-  updated_at?: string;
+  source_uri: string | null;
+  source_updated_at: string | null;
 }
 
 export interface Warning {
@@ -19,7 +26,7 @@ export interface Warning {
   message: string;
 }
 
-export interface Answer {
+export interface ChatResponse {
   answer: string;
   citations: Citation[];
   status: AnswerStatus;
@@ -30,4 +37,5 @@ export interface ChatRequest {
   query: string;
   // Answer mode selected by the user, one of tenant_config.answer.modes.
   mode?: string;
+  workspace_id?: number | null;
 }
