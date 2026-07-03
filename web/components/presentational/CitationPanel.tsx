@@ -35,7 +35,11 @@ export function CitationPanel({
                     <>
                       <dt>URL</dt>
                       <dd>
-                        <a href={citation.source_uri}>{citation.source_uri}</a>
+                        {/^https?:\/\//i.test(citation.source_uri) ? (
+                          <a href={citation.source_uri}>{citation.source_uri}</a>
+                        ) : (
+                          <span>{citation.source_uri}</span>
+                        )}
                       </dd>
                     </>
                   ) : null}
