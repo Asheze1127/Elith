@@ -1,24 +1,38 @@
 # Web image for the Next.js frontend.
-# NOTE: the web/ Next.js app is created in #13 (FE-01). Until then this image
-# CANNOT be built (there is no web/ source yet) and the `web` service is
-# expected to fail `docker compose build web`. Bring up db/api only for now.
 # Build context is ./web (see docker-compose.yml), so paths below are relative
 # to web/.
-# TODO(#13): when web/ is implemented, add web/.dockerignore excluding
-# node_modules/, .next/ and .env so they are not baked into the image.
+#
+# Multi-stage build: `next build` needs devDependencies (typescript, eslint,
+# vitest's types, etc.), but the final image should only ship prod deps. A
+# single-stage build with NODE_ENV=production set before `npm ci` would make
+# npm skip devDependencies (npm's `omit` config defaults to `dev` under
+# NODE_ENV=production), causing `next build` to fail (or, worse, silently
+# auto-install missing packages mid-build if the environment happens to have
+# network access -- non-reproducible and broken in network-isolated CI).
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# Install ALL dependencies (including dev) for the build step.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . ./
+RUN npm run build
+
 FROM node:20-slim
 
 ENV NODE_ENV=production
 
 WORKDIR /app
 
-# Install dependencies first for better layer caching.
+# Separate, prod-only install for the runtime image.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --omit=dev
 
-# Copy the rest of the app and build the production bundle.
-COPY . ./
-RUN npm run build
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.ts ./next.config.ts
 
 EXPOSE 3000
 
