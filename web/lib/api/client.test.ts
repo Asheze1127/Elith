@@ -104,6 +104,23 @@ describe("apiGet / apiPost", () => {
     );
   });
 
+  it("adds X-Tenant-ID when NEXT_PUBLIC_LOCAL_TENANT_ID is configured", async () => {
+    vi.stubEnv("NEXT_PUBLIC_LOCAL_TENANT_ID", " 1 ");
+    vi.resetModules();
+    const { apiGet: apiGetWithTenantHeader } = await import("./client");
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiGetWithTenantHeader("/tenant/config");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/tenant/config"),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-Tenant-ID": "1" }),
+      }),
+    );
+  });
+
   it("apiPost sends a JSON-serialized body with POST", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockResponse(200, { ok: true }));
     vi.stubGlobal("fetch", fetchMock);
