@@ -87,7 +87,7 @@ def _initial_migration_source() -> str:
     # The initial migration is the one with down_revision = None.
     for path in files:
         text = path.read_text(encoding="utf-8")
-        if "down_revision: Union[str, Sequence[str], None] = None" in text:
+        if re.search(r"^down_revision\b.*=\s*None\b", text, re.MULTILINE):
             return text
     raise AssertionError("no initial migration (down_revision=None) found")
 
