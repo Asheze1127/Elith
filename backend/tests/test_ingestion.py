@@ -12,8 +12,9 @@ import pytest
 from sqlalchemy import select
 
 from app.models.chunk import EMBEDDING_DIM, Chunk
+from app.models.workspace import Workspace
 from app.providers.base import EmbeddingProvider
-from app.repository.documents import TenantNotFoundError
+from app.repository.documents import TenantNotFoundError, WorkspaceMismatchError
 from ingestion.pipeline import EmbeddingProviderError, EmptyDocumentError, ingest_document
 from ingestion.splitter import split_text
 
@@ -28,6 +29,16 @@ class _BoomEmbeddingProvider(EmbeddingProvider):
 
     def embed_query(self, text: str) -> list[float]:
         raise RuntimeError("provider unavailable")
+
+
+class _ShortEmbeddingProvider(EmbeddingProvider):
+    """Returns fewer vectors than chunks given -- a provider contract violation."""
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [[0.0] * EMBEDDING_DIM] if texts else []
+
+    def embed_query(self, text: str) -> list[float]:
+        return [0.0] * EMBEDDING_DIM
 
 
 # --- splitter --------------------------------------------------------------
@@ -91,4 +102,62 @@ def test_ingest_document_wraps_provider_failure(db_session, make_tenant) -> None
             title="X",
             content="hello world",
             embedding_provider=_BoomEmbeddingProvider(),
+        )
+
+
+def test_ingest_document_wraps_embedding_count_mismatch(db_session, make_tenant) -> None:
+    # A provider returning a different number of vectors than input chunks is
+    # a contract violation; it must surface as EmbeddingProviderError (-> 502
+    # at the API layer), not as a raw ValueError from the persistence layer's
+    # strict zip().
+    tenant = make_tenant()
+    long_content = "a" * 600  # forces split_text to produce >1 chunk
+    with pytest.raises(EmbeddingProviderError):
+        ingest_document(
+            db_session,
+            tenant_id=tenant.id,
+            title="X",
+            content=long_content,
+            embedding_provider=_ShortEmbeddingProvider(),
+        )
+
+
+def test_ingest_document_accepts_workspace_belonging_to_same_tenant(
+    db_session, make_tenant
+) -> None:
+    tenant = make_tenant()
+    workspace = Workspace(tenant_id=tenant.id, name="Dept A")
+    db_session.add(workspace)
+    db_session.commit()
+    db_session.refresh(workspace)
+
+    document = ingest_document(
+        db_session,
+        tenant_id=tenant.id,
+        title="X",
+        content="hello world",
+        workspace_id=workspace.id,
+    )
+
+    assert document.workspace_id == workspace.id
+
+
+def test_ingest_document_rejects_workspace_owned_by_another_tenant(db_session, make_tenant) -> None:
+    # Same-tenant invariant (document.py's Document.workspace_id docstring):
+    # a workspace_id must belong to the same tenant as the document, and the
+    # DB cannot enforce this (no composite FK), so the repository layer must.
+    tenant_a = make_tenant("Tenant A")
+    tenant_b = make_tenant("Tenant B")
+    workspace_b = Workspace(tenant_id=tenant_b.id, name="B's workspace")
+    db_session.add(workspace_b)
+    db_session.commit()
+    db_session.refresh(workspace_b)
+
+    with pytest.raises(WorkspaceMismatchError):
+        ingest_document(
+            db_session,
+            tenant_id=tenant_a.id,
+            title="X",
+            content="hello world",
+            workspace_id=workspace_b.id,
         )

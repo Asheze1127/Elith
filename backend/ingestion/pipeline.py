@@ -66,6 +66,15 @@ def ingest_document(
     except Exception as exc:  # provider/SDK errors vary; normalize to one type
         raise EmbeddingProviderError(f"failed to generate embeddings: {exc}") from exc
 
+    # A provider returning a different number of vectors than input chunks is
+    # a contract violation, not a caller input error; catch it here (as an
+    # EmbeddingProviderError -> 502) instead of letting it surface as an
+    # unhandled ValueError from the strict zip() in create_document.
+    if len(embeddings) != len(chunks):
+        raise EmbeddingProviderError(
+            f"embedding provider returned {len(embeddings)} vectors for {len(chunks)} chunks"
+        )
+
     return documents_repo.create_document(
         db,
         tenant_id=tenant_id,

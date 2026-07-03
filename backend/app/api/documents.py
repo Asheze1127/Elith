@@ -8,7 +8,7 @@ developed issue this endpoint does not depend on yet.
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -26,9 +26,10 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 class DocumentIngestRequest(BaseModel):
     """Body for POST /documents.
 
-    ``title`` requires at least one non-whitespace character via
-    ``min_length=1``; FastAPI turns a violation into a 422 automatically, so
-    invalid title input is rejected without any custom error handling.
+    ``title`` requires at least one non-whitespace character. ``min_length``
+    alone only rejects the empty string (pydantic does not strip strings
+    before length-checking), so a whitespace-only title needs an explicit
+    validator; FastAPI turns either violation into a 422 automatically.
     """
 
     tenant_id: int
@@ -37,6 +38,13 @@ class DocumentIngestRequest(BaseModel):
     workspace_id: int | None = None
     source_uri: str | None = None
     source_updated_at: datetime | None = None
+
+    @field_validator("title")
+    @classmethod
+    def _title_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("title must contain at least one non-whitespace character")
+        return value
 
 
 class DocumentResponse(BaseModel):
