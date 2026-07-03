@@ -1,8 +1,9 @@
-"""Shared RAG pipeline package (directory.md): retrieve / prompt / steps.
+"""Shared RAG pipeline package (directory.md): retrieve / pipeline / prompt / steps.
 
-Only ``retrieve`` exists so far (#8); the orchestrator, prompt layer, and
-named pipeline steps (stale_warning / contradiction_check / ground_check /
-cite) are separate, later issues (#9-#12) and are added here incrementally --
-this package stays a flat catalog of common parts, never a per-tenant fork
-(multi-tenant-design.md).
+``retrieve`` (#8), the ``pipeline`` orchestrator and ``prompt`` layer (#9) now
+exist. The named pipeline steps themselves (stale_warning / contradiction_check
+/ ground_check / cite, under ``app.rag.steps``) are still separate, later
+issues (#10/#11/#18/#19) -- #9 only builds the registry mechanism they will
+register into. This package stays a flat catalog of common parts, never a
+per-tenant fork (multi-tenant-design.md).
 """

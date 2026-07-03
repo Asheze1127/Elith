@@ -15,6 +15,8 @@ from app.models.chunk import Chunk
 from app.models.document import Document
 from app.models.workspace import Workspace
 from app.providers import get_embedding_provider
+from app.providers.base import LLMProvider
+from app.rag.pipeline import run_pipeline
 from app.rag.retrieve import retrieve
 
 
@@ -192,3 +194,57 @@ def test_retrieve_never_returns_another_tenants_chunks_when_tenant_has_no_data(
     results = retrieve(db_session, tenant_id=tenant_a.id, query=query)
 
     assert results == []
+
+
+class _StubLLMProvider(LLMProvider):
+    """Fixed-answer provider; these tests only care about which chunks
+    reached the prompt, not the pipeline's answer text."""
+
+    def generate(self, prompt: str, **opts: object) -> str:
+        return "stub answer"
+
+
+def test_run_pipeline_never_returns_another_tenants_chunks(db_session, make_tenant) -> None:
+    """#9's orchestrator (app.rag.pipeline.run_pipeline) must forward
+    tenant_id to retrieve() unchanged, never widening or bypassing its
+    tenant scoping.
+
+    This is NOT a re-test of retrieve()'s own isolation guarantee -- that is
+    already exhaustively covered above -- it only confirms run_pipeline's
+    call into retrieve() stays scoped, using the same adversarial setup
+    (tenant B's chunk pinned to the best possible match for tenant A's query).
+    """
+    tenant_a = make_tenant("Tenant A")
+    tenant_b = make_tenant("Tenant B")
+    provider = get_embedding_provider()
+    broad_query = "please help me"
+    adversarial_vector = provider.embed_query(broad_query)
+
+    chunk_a_doc = _seed_document(
+        db_session,
+        tenant_id=tenant_a.id,
+        title="A's doc",
+        content="how to submit an expense report",
+        embedding=provider.embed_query("how to submit an expense report"),
+    )
+    chunk_b_doc = _seed_document(
+        db_session,
+        tenant_id=tenant_b.id,
+        title="B's confidential doc",
+        content="TENANT B SECRET: internal salary bands",
+        embedding=adversarial_vector,
+    )
+
+    result = run_pipeline(
+        db_session,
+        tenant_id=tenant_a.id,
+        query=broad_query,
+        config={"pipeline": []},
+        top_k=50,
+        llm_provider=_StubLLMProvider(),
+    )
+
+    result_ids = {c.id for c in result.chunks}
+    assert chunk_b_doc.chunks[0].id not in result_ids
+    assert all(c.tenant_id == tenant_a.id for c in result.chunks)
+    assert chunk_a_doc.chunks[0].id in result_ids
