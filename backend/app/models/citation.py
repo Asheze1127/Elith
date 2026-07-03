@@ -48,10 +48,12 @@ class Citation(TimestampMixin, Base):
     chunk_id: Mapped[int | None] = mapped_column(
         ForeignKey("chunk.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     document_id: Mapped[int | None] = mapped_column(
         ForeignKey("document.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     # Copied text/metadata so the citation stays displayable independent of the
     # source row (show_source_metadata in tenant_config).
