@@ -138,14 +138,18 @@ def test_run_pipeline_executes_steps_in_config_order(db_session, make_tenant) ->
 
 def test_run_pipeline_raises_for_unregistered_step_name(db_session, make_tenant) -> None:
     tenant = make_tenant()
-    assert "cite" not in STEPS  # #10 has not landed in this worktree
+    # A name no step module registers -- unlike "cite", which #10 has since
+    # landed in this worktree (see app/rag/steps/cite.py), so it can no
+    # longer stand in for "an unregistered step name" here.
+    unregistered_name = "_never_registered_step"
+    assert unregistered_name not in STEPS
 
-    with pytest.raises(UnknownStepError, match="cite"):
+    with pytest.raises(UnknownStepError, match=unregistered_name):
         run_pipeline(
             db_session,
             tenant_id=tenant.id,
             query="anything",
-            config={"pipeline": ["cite"]},
+            config={"pipeline": [unregistered_name]},
             llm_provider=_StubLLMProvider(),
         )
 
