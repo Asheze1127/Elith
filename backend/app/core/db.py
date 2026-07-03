@@ -36,7 +36,6 @@ def get_sessionmaker() -> sessionmaker[Session]:
     if _SessionLocal is None:
         _SessionLocal = sessionmaker(
             bind=get_engine(),
-            autocommit=False,
             autoflush=False,
         )
     return _SessionLocal
