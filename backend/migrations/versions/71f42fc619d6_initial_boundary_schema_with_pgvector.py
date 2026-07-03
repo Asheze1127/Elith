@@ -150,8 +150,6 @@ def downgrade() -> None:
     op.drop_table('answer')
     op.drop_table('tenant')
     # ### end Alembic commands ###
-    # Mirror the upgrade. This assumes a single-purpose DB: IF EXISTS only guards
-    # the "already removed" case -- it does NOT protect an extension that is still
-    # in use. On a shared DB the vector extension is a shared resource that other
-    # features may depend on, so dropping it here could unexpectedly break them.
-    op.execute("DROP EXTENSION IF EXISTS vector")
+    # Note: pgvector is a shared Postgres resource. We intentionally do not drop the
+    # extension here to avoid breaking other schemas/apps in a shared database.
+    # If you need a full teardown in a dedicated DB, drop the extension manually.
