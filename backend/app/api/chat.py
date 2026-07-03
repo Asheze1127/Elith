@@ -67,12 +67,19 @@ def create_chat_answer(
     config = tenant_config.config
     mode = _resolve_mode(config, payload.mode)
 
+    # Do not mutate tenant_config.config (JSONB row); build a shallow copy for prompt/pipeline.
+    config_for_pipeline = config
+    if mode is not None:
+        answer_cfg = config.get("answer")
+        if isinstance(answer_cfg, dict):
+            config_for_pipeline = {**config, "answer": {**answer_cfg, "default_mode": mode}}
+
     try:
         result = run_pipeline(
             db,
             tenant_id=tenant_config.tenant_id,
             query=payload.query,
-            config=config,
+            config=config_for_pipeline,
             workspace_id=payload.workspace_id,
         )
         create_answer_with_citations(
