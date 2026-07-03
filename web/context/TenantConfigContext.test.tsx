@@ -121,4 +121,28 @@ describe("TenantConfigProvider", () => {
       ),
     );
   });
+
+  it("does not warn or throw when the fetch resolves after the provider unmounts", async () => {
+    // Exercises the `cancelled` cleanup guard: without it, resolving a
+    // pending fetch after unmount would call setState on an unmounted
+    // component (React surfaces this as a console.error warning).
+    let resolveFetch!: (value: TenantConfig) => void;
+    const pending = new Promise<TenantConfig>((resolve) => {
+      resolveFetch = resolve;
+    });
+    vi.mocked(getTenantConfig).mockReturnValue(pending);
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { unmount } = render(
+      <TenantConfigProvider>
+        <Probe />
+      </TenantConfigProvider>,
+    );
+    unmount();
+    resolveFetch(sampleConfig);
+    await pending;
+
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
 });
