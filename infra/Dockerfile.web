@@ -1,0 +1,25 @@
+# Web image for the Next.js frontend.
+# NOTE: the web/ Next.js app is created in #13 (FE-01). Until then this image
+# CANNOT be built (there is no web/ source yet) and the `web` service is
+# expected to fail `docker compose build web`. Bring up db/api only for now.
+# Build context is ./web (see docker-compose.yml), so paths below are relative
+# to web/.
+# TODO(#13): when web/ is implemented, add web/.dockerignore excluding
+# node_modules/, .next/ and .env so they are not baked into the image.
+FROM node:20-slim
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+# Install dependencies first for better layer caching.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Copy the rest of the app and build the production bundle.
+COPY . ./
+RUN npm run build
+
+EXPOSE 3000
+
+CMD ["npm", "start"]

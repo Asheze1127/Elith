@@ -1,0 +1,31 @@
+# API image for the FastAPI backend.
+# Build context is ./backend (see docker-compose.yml), so paths below are
+# relative to backend/. Dependencies are installed from pyproject.toml.
+FROM python:3.11-slim
+
+# Do not buffer stdout/stderr and do not write .pyc files (cleaner container logs).
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+# Install dependencies first for better layer caching: copying only the project
+# metadata means dependency install is not invalidated by source-only changes.
+COPY pyproject.toml ./
+COPY app ./app
+COPY ingestion ./ingestion
+
+# Runtime-only install (dev extras such as pytest/ruff are intentionally excluded).
+# Done as root during the build so packages land in the system site-packages.
+RUN pip install --no-cache-dir .
+
+# Drop privileges: create an unprivileged user and run uvicorn as it. Nothing
+# in the runtime phase needs root, so this shrinks the container's blast radius.
+RUN useradd -m app
+USER app
+
+EXPOSE 8000
+
+# /health returns 200 without a DB connection, so the container is usable
+# even before migrations run.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,33 @@
+# NOTE: Docker uses the .dockerignore located at the root of each build
+# context. The api/web services build with context=./backend and ./web, so
+# they read backend/.dockerignore and web/.dockerignore respectively -- NOT
+# this file. This root file only takes effect when building with the
+# repository root as the build context (e.g. `docker build .`).
+#
+# Keep build contexts small and avoid leaking local artifacts/secrets.
+.git
+.gitignore
+.dockerignore
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+npm-debug.log*
+
+# Local env and secrets (never bake into images)
+.env
+*.env
+!.env.example
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store

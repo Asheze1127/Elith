@@ -1,0 +1,19 @@
+# Applies to the api build context (context=./backend). Keeps the context
+# small and prevents baking local artifacts/secrets into the image.
+.git
+*.pyc
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Local env and secrets (never bake into images)
+.env
+*.env
+# Keep the template so it can be documented/copied inside the image if needed.
+!.env.example
