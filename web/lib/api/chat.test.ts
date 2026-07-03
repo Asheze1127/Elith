@@ -18,6 +18,7 @@ describe("sendChatMessage", () => {
   it("posts the query and selected mode to /chat", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       mockResponse(200, {
+        answer_id: 1,
         answer: "回答です",
         citations: [],
         status: "answered",

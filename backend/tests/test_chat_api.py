@@ -92,6 +92,7 @@ def test_post_chat_returns_answer_citations_status_and_persists_rows(
     assert response.status_code == 200
     body = response.json()
     assert body["answer"]
+    assert isinstance(body["answer_id"], int)
     assert body["status"] == STATUS_NEEDS_REVIEW
     assert body["warnings"] == []
     assert body["citations"] == [
@@ -105,13 +106,19 @@ def test_post_chat_returns_answer_citations_status_and_persists_rows(
         }
     ]
 
-    answers = db_session.query(Answer).all()
-    citations = db_session.query(Citation).all()
+    answers = db_session.query(Answer).filter(Answer.tenant_id == tenant.id).all()
+    citations = (
+        db_session.query(Citation)
+        .join(Answer, Answer.id == Citation.answer_id)
+        .filter(Answer.tenant_id == tenant.id)
+        .all()
+    )
     assert len(answers) == 1
     assert answers[0].tenant_id == tenant.id
     assert answers[0].query == query
     assert answers[0].mode == "external"
     assert answers[0].status == STATUS_NEEDS_REVIEW
+    assert body["answer_id"] == answers[0].id
     assert len(citations) == 1
     assert citations[0].answer_id == answers[0].id
     assert citations[0].document_id == document.id
@@ -149,3 +156,26 @@ def test_post_chat_unknown_pipeline_step_returns_clear_message(
 
     assert response.status_code == 400
     assert "チャット設定" in response.json()["detail"]
+
+
+def test_post_chat_no_data_returns_confirmation_path(client, db_session, make_tenant) -> None:
+    tenant = make_tenant()
+    _add_config(
+        db_session,
+        tenant_id=tenant.id,
+        config={
+            "answer": {"citation": "required"},
+            "pipeline": ["ground_check", "cite"],
+        },
+    )
+
+    response = client.post(
+        "/chat",
+        headers={"X-Tenant-ID": str(tenant.id)},
+        json={"query": "存在しない資料について教えて"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "no_data"
+    assert "該当資料が見つかりません" in body["answer"]

@@ -34,6 +34,7 @@ describe("useChat", () => {
 
   it("stores the chat response after a successful submit", async () => {
     vi.mocked(sendChatMessage).mockResolvedValue({
+      answer_id: 1,
       answer: "回答です",
       citations: [],
       status: "answered",

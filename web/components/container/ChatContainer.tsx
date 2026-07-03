@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useChat } from "@/hooks/useChat";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { AnswerMessage } from "@/components/presentational/AnswerMessage";
 import { ChatComposer } from "@/components/presentational/ChatComposer";
 import { CitationPanel } from "@/components/presentational/CitationPanel";
+import { FeedbackButtons } from "@/components/presentational/FeedbackButtons";
 import { StatusBadge } from "@/components/presentational/StatusBadge";
 import { WarningList } from "@/components/presentational/WarningList";
 
@@ -57,6 +59,12 @@ export function ChatContainer() {
             {chatError}
           </p>
         ) : null}
+        {!response && !chatError ? (
+          <section className="empty-state" aria-label="空状態">
+            <p>資料が未投入の場合はサンプルデータから始められます。</p>
+            <Link href="/documents">ドキュメント管理</Link>
+          </section>
+        ) : null}
         {response ? (
           <>
             <div className="answer-toolbar">
@@ -69,6 +77,12 @@ export function ChatContainer() {
               <CitationPanel
                 citations={response.citations}
                 showSourceMetadata={config.answer.show_source_metadata}
+              />
+            ) : null}
+            {config.feedback.enabled ? (
+              <FeedbackButtons
+                answerId={response.answer_id}
+                reasonCategories={config.feedback.reason_categories}
               />
             ) : null}
           </>

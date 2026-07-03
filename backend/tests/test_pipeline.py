@@ -34,7 +34,14 @@ from app.models.document import Document
 from app.providers import get_embedding_provider
 from app.providers.base import LLMProvider
 from app.rag.pipeline import LLMProviderError, PipelineResult, UnknownStepError, run_pipeline
-from app.rag.steps import STEPS, CitationDraft, PipelineState, escalate_status, register_step
+from app.rag.steps import (
+    STEPS,
+    CitationDraft,
+    PipelineState,
+    WarningDraft,
+    escalate_status,
+    register_step,
+)
 
 
 def _reverse_order(state: PipelineState, config: dict) -> PipelineState:
@@ -215,6 +222,33 @@ def test_run_pipeline_builds_prompt_from_config_and_calls_provider(db_session, m
     assert "what are your hours" in captured_prompts[0]
 
 
+def test_run_pipeline_reflects_requested_mode_in_prompt(db_session, make_tenant) -> None:
+    tenant = make_tenant()
+    captured_prompts: list[str] = []
+
+    class _CapturingLLMProvider(LLMProvider):
+        def generate(self, prompt: str, **opts: object) -> str:
+            captured_prompts.append(prompt)
+            return "ok"
+
+    run_pipeline(
+        db_session,
+        tenant_id=tenant.id,
+        query="what are your hours",
+        config={
+            "answer": {
+                "modes": ["internal", "external"],
+                "default_mode": "internal",
+            },
+            "pipeline": [],
+        },
+        mode="external",
+        llm_provider=_CapturingLLMProvider(),
+    )
+
+    assert "Mode: external" in captured_prompts[0]
+
+
 def test_step_can_set_status_and_citation_with_empty_chunks(db_session, make_tenant) -> None:
     """The scenario Finding #1 flagged as impossible under the old (chunks-only)
     contract: a ground_check-like step must be able to set
@@ -229,7 +263,10 @@ def test_step_can_set_status_and_citation_with_empty_chunks(db_session, make_ten
         return dataclasses.replace(
             state,
             status=STATUS_NEEDS_REVIEW,
-            warnings=[*state.warnings, "no grounding chunks found"],
+            warnings=[
+                *state.warnings,
+                WarningDraft(type="ground_check", message="no grounding chunks found"),
+            ],
             citations=[
                 *state.citations,
                 CitationDraft(snippet="unable to ground this answer", source_uri=None),
@@ -250,7 +287,9 @@ def test_step_can_set_status_and_citation_with_empty_chunks(db_session, make_ten
 
     assert result.chunks == []
     assert result.status == STATUS_NEEDS_REVIEW
-    assert result.warnings == ["no grounding chunks found"]
+    assert result.warnings == [
+        WarningDraft(type="ground_check", message="no grounding chunks found")
+    ]
     assert len(result.citations) == 1
     assert result.citations[0].snippet == "unable to ground this answer"
 

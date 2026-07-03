@@ -34,17 +34,18 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.answer import STATUS_ANSWERED
+from app.models.answer import STATUS_ANSWERED, STATUS_NO_DATA
 from app.models.chunk import Chunk
 from app.providers import get_llm_provider
 from app.providers.base import EmbeddingProvider, LLMProvider
 from app.rag.prompt import build_prompt
 from app.rag.retrieve import DEFAULT_TOP_K, retrieve
-from app.rag.steps import STEPS, CitationDraft, PipelineState
+from app.rag.steps import STEPS, CitationDraft, PipelineState, WarningDraft
 
 # Pipeline entries naming this are a no-op (see module docstring): retrieve is
 # a distinct prior phase, not a registry-dispatched step.
 _RETRIEVE_STEP_NAME = "retrieve"
+NO_DATA_ANSWER = "該当資料が見つかりませんでした。担当部署または管理者に確認してください。"
 
 
 class PipelineError(Exception):
@@ -89,7 +90,7 @@ class PipelineResult:
     chunks: list[Chunk]
     answer: str
     status: str = STATUS_ANSWERED
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[WarningDraft] = field(default_factory=list)
     citations: list[CitationDraft] = field(default_factory=list)
 
 
@@ -101,6 +102,7 @@ def run_pipeline(
     config: dict[str, Any],
     workspace_id: int | None = None,
     top_k: int = DEFAULT_TOP_K,
+    mode: str | None = None,
     embedding_provider: EmbeddingProvider | None = None,
     llm_provider: LLMProvider | None = None,
 ) -> PipelineResult:
@@ -133,18 +135,28 @@ def run_pipeline(
         top_k=top_k,
         embedding_provider=embedding_provider,
     )
+    effective_config = _with_requested_mode(config, mode)
     state = PipelineState(chunks=chunks)
 
-    for step_name in config.get("pipeline", []):
+    for step_name in effective_config.get("pipeline", []):
         if step_name == _RETRIEVE_STEP_NAME:
             continue
         try:
             step_fn = STEPS[step_name]
         except KeyError:
             raise UnknownStepError(f"unknown pipeline step: {step_name!r}") from None
-        state = step_fn(state, config)
+        state = step_fn(state, effective_config)
 
-    prompt = build_prompt(config, state.chunks, query)
+    if state.status == STATUS_NO_DATA:
+        return PipelineResult(
+            chunks=state.chunks,
+            answer=NO_DATA_ANSWER,
+            status=state.status,
+            warnings=state.warnings,
+            citations=state.citations,
+        )
+
+    prompt = build_prompt(effective_config, state.chunks, query)
 
     provider = llm_provider or get_llm_provider()
     try:
@@ -159,3 +171,13 @@ def run_pipeline(
         warnings=state.warnings,
         citations=state.citations,
     )
+
+
+def _with_requested_mode(config: dict[str, Any], mode: str | None) -> dict[str, Any]:
+    """Return a shallow config copy whose answer.default_mode is ``mode``."""
+    if mode is None:
+        return config
+
+    answer_value = config.get("answer")
+    answer = answer_value if isinstance(answer_value, dict) else {}
+    return {**config, "answer": {**answer, "default_mode": mode}}

@@ -120,6 +120,32 @@ a {
   color: var(--foreground);
 }
 
+.mode-toggle {
+  display: inline-flex;
+  min-height: 36px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.mode-toggle__button {
+  min-width: 88px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.mode-toggle__button[aria-pressed="true"] {
+  background: var(--background);
+  color: var(--accent-strong);
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
 .chat-composer__textarea {
   width: 100%;
   min-height: 132px;
@@ -279,6 +305,171 @@ a {
 .citation-panel__meta a {
   color: var(--accent-strong);
   overflow-wrap: anywhere;
+}
+
+.feedback-panel,
+.empty-state,
+.admin-panel {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--background);
+}
+
+.feedback-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.feedback-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.feedback-panel__button,
+.feedback-panel__submit,
+.primary-button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 14px;
+  background: var(--background);
+  color: var(--foreground);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.feedback-panel__button--bad {
+  color: var(--danger);
+}
+
+.feedback-panel__button:disabled,
+.feedback-panel__submit:disabled,
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.feedback-panel__details,
+.admin-layout,
+.admin-panel,
+.review-panel,
+.field {
+  display: grid;
+  gap: 12px;
+}
+
+.inline-status {
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.empty-state {
+  color: var(--muted);
+}
+
+.empty-state a {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.top-nav {
+  display: flex;
+  gap: 12px;
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-layout {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  padding-top: 20px;
+}
+
+.admin-panel h2 {
+  font-size: 18px;
+}
+
+.field span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+}
+
+.record-list,
+.review-list,
+.review-list__feedback {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}
+
+.record-list__item,
+.review-list__item {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.record-list__item p,
+.record-list__item span,
+.review-list__item p,
+.review-list__feedback {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.review-list__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-list__feedback li {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+}
+
+@media (max-width: 720px) {
+  .chat-header,
+  .chat-composer__row,
+  .review-list__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-toggle {
+    width: 100%;
+  }
+
+  .mode-toggle__button {
+    flex: 1;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

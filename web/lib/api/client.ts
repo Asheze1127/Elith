@@ -30,6 +30,24 @@ export class ApiRequestError extends Error implements ApiError {
   }
 }
 
+export function getLocalTenantId(): number {
+  if (!LOCAL_TENANT_ID) {
+    throw new ApiRequestError(
+      "ローカルテナントIDが設定されていません。NEXT_PUBLIC_LOCAL_TENANT_IDを設定してください。",
+      null,
+    );
+  }
+  const tenantId = Number(LOCAL_TENANT_ID);
+  if (!Number.isInteger(tenantId)) {
+    throw new ApiRequestError(
+      "ローカルテナントIDの形式が正しくありません。",
+      null,
+      LOCAL_TENANT_ID,
+    );
+  }
+  return tenantId;
+}
+
 export interface ApiRequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;

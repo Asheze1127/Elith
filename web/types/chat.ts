@@ -27,6 +27,7 @@ export interface Warning {
 }
 
 export interface ChatResponse {
+  answer_id: number;
   answer: string;
   citations: Citation[];
   status: AnswerStatus;

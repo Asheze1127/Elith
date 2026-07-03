@@ -41,6 +41,7 @@ describe("ChatContainer", () => {
   it("submits a question and renders the answer", async () => {
     vi.mocked(getTenantConfig).mockResolvedValue(sampleConfig);
     vi.mocked(sendChatMessage).mockResolvedValue({
+      answer_id: 1,
       answer: "請求処理は月末締めです。",
       citations: [],
       status: "answered",
@@ -57,9 +58,7 @@ describe("ChatContainer", () => {
     fireEvent.change(screen.getByLabelText("質問"), {
       target: { value: "請求処理の締め日は？" },
     });
-    fireEvent.change(screen.getByLabelText("回答モード"), {
-      target: { value: "external" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "external" }));
     fireEvent.click(screen.getByRole("button", { name: "送信" }));
 
     await waitFor(() =>
@@ -97,6 +96,7 @@ describe("ChatContainer", () => {
   it("renders citations from the chat response", async () => {
     vi.mocked(getTenantConfig).mockResolvedValue(sampleConfig);
     vi.mocked(sendChatMessage).mockResolvedValue({
+      answer_id: 1,
       answer: "請求処理は月末締めです。",
       citations: [
         {
@@ -132,6 +132,7 @@ describe("ChatContainer", () => {
   it("renders status and warnings from the chat response", async () => {
     vi.mocked(getTenantConfig).mockResolvedValue(sampleConfig);
     vi.mocked(sendChatMessage).mockResolvedValue({
+      answer_id: 1,
       answer: "確認が必要な回答です。",
       citations: [],
       status: "needs_review",
@@ -162,5 +163,30 @@ describe("ChatContainer", () => {
     expect(screen.getByLabelText("警告").textContent).toContain(
       "古い資料を参照しています。",
     );
+  });
+
+  it("renders the feedback panel after an answer", async () => {
+    vi.mocked(getTenantConfig).mockResolvedValue(sampleConfig);
+    vi.mocked(sendChatMessage).mockResolvedValue({
+      answer_id: 123,
+      answer: "請求処理は月末締めです。",
+      citations: [],
+      status: "answered",
+      warnings: [],
+    });
+
+    render(
+      <TenantConfigProvider>
+        <ChatContainer />
+      </TenantConfigProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "東雲ビジネスサポート" });
+    fireEvent.change(screen.getByLabelText("質問"), {
+      target: { value: "請求処理" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "送信" }));
+
+    expect(await screen.findByLabelText("フィードバック")).toBeTruthy();
   });
 });

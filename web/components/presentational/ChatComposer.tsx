@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import type { TenantConfig } from "@/types/tenant-config";
+import { ModeToggle } from "./ModeToggle";
 
 interface ChatComposerProps {
   config: TenantConfig;
@@ -35,20 +36,7 @@ export function ChatComposer({
         <label className="chat-composer__label" htmlFor="chat-query">
           質問
         </label>
-        {modes.length > 1 ? (
-          <select
-            className="chat-composer__mode"
-            value={mode}
-            onChange={(event) => onModeChange(event.target.value)}
-            aria-label="回答モード"
-          >
-            {modes.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        ) : null}
+        <ModeToggle modes={modes} value={mode} onChange={onModeChange} />
       </div>
       <textarea
         id="chat-query"

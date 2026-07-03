@@ -51,6 +51,7 @@ class CitationResponse(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    answer_id: int
     answer: str
     citations: list[CitationResponse]
     status: str
@@ -74,8 +75,9 @@ def create_chat_answer(
             query=payload.query,
             config=config,
             workspace_id=payload.workspace_id,
+            mode=mode,
         )
-        create_answer_with_citations(
+        answer = create_answer_with_citations(
             db,
             tenant_id=tenant_config.tenant_id,
             query=payload.query,
@@ -106,13 +108,17 @@ def create_chat_answer(
         ) from exc
 
     return ChatResponse(
+        answer_id=answer.id,
         answer=result.answer,
         citations=[
             _citation_response(db, tenant_id=tenant_config.tenant_id, draft=draft)
             for draft in result.citations
         ],
         status=result.status,
-        warnings=[WarningResponse(type="pipeline", message=message) for message in result.warnings],
+        warnings=[
+            WarningResponse(type=warning.type, message=warning.message)
+            for warning in result.warnings
+        ],
     )
 
 
