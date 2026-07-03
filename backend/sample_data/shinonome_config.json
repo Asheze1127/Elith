@@ -1,0 +1,37 @@
+{
+  "tenant_id": "a_shinonome",
+  "display_name": "東雲ビジネスサポート",
+  "search": {
+    "scope": "all"
+  },
+  "answer": {
+    "modes": ["internal", "external"],
+    "default_mode": "internal",
+    "citation": "required",
+    "low_confidence_action": "needs_review",
+    "show_source_metadata": true
+  },
+  "pipeline": [
+    "retrieve",
+    "stale_warning",
+    "contradiction_check",
+    "ground_check",
+    "cite"
+  ],
+  "warnings": {
+    "stale_sources": true,
+    "contradiction": true
+  },
+  "category_policies": {
+    "billing": {
+      "tone": "formal"
+    },
+    "contract": {
+      "require_human_check": true
+    }
+  },
+  "feedback": {
+    "enabled": true,
+    "reason_categories": ["古い根拠", "誤った引用", "表現が不適切"]
+  }
+}

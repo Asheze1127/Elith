@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from app.api import chat, documents, health, tenant
+from app.api import chat, documents, feedback, health, tenant
 from app.core.logging import setup_logging
 
 
@@ -12,6 +12,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Elith RAG Backend")
     app.include_router(health.router)
     app.include_router(documents.router)
+    app.include_router(feedback.router)
     app.include_router(tenant.router)
     app.include_router(chat.router)
     return app

@@ -27,6 +27,6 @@ npm run test    # Vitest (unit tests, e.g. lib/api/client.ts)
 
 ## Status
 
-This is the Phase 1 scaffold (#13): App Router skeleton, `providers.tsx`,
-`lib/api/client.ts`, and `types/` DTOs. The chat UI, tenant config context,
-and documents/review pages are implemented in follow-up issues.
+The frontend currently includes the chat screen, mode toggle, citation/status/
+warning display, feedback submission, `/documents`, and `/review`. The root
+`../README.md` has the full local setup and sample-data flow.
