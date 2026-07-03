@@ -34,12 +34,18 @@ dev = [
     "pytest-asyncio",
 ]
 
-[tool.setuptools]
-packages = ["app", "ingestion"]
+# Auto-discover packages so subpackages (app.api/app.core) are included in a
+# non-editable install (Docker/prod). A flat list omitted them -> ModuleNotFoundError.
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "ingestion*"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Alembic-generated revision files follow the tool's own template (long Column
+# lines, typing.Union, etc.) and are regenerated, so we don't lint them.
+extend-exclude = ["migrations/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B"]

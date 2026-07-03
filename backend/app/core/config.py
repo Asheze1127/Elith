@@ -5,8 +5,13 @@ which are distinct from tenant_config (per-tenant behavior stored in the DB).
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Module-relative .env path so loading does not depend on the process CWD.
+# parents[2] resolves from app/core/config.py -> backend/, i.e. backend/.env.
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 class Settings(BaseSettings):
@@ -15,7 +20,7 @@ class Settings(BaseSettings):
     Defaults keep the app importable/bootable without a live DB or secrets.
     """
 
-    # local -> Gemini free API / no key -> mock (provider selection handled by providers.factory)
+    # local -> Gemini free API / no key -> mock (provider selection handled in #4)
     ENVIRONMENT: str = "local"
     # SQLAlchemy URL using the postgresql+psycopg dialect (matches docker-compose db)
     DATABASE_URL: str = "postgresql+psycopg://elith:elith@db:5432/elith"
@@ -25,7 +30,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )
