@@ -74,6 +74,14 @@ from app.models.chunk import Chunk
 
 
 @dataclass
+class WarningDraft:
+    """A typed warning produced by a pipeline step before API serialization."""
+
+    type: str
+    message: str
+
+
+@dataclass
 class CitationDraft:
     """A citation candidate produced by a step, before persistence (#12).
 
@@ -129,7 +137,7 @@ class PipelineState:
     # (e.g. to STATUS_NEEDS_REVIEW) but this module does not interpret the
     # value itself -- assembling the final /chat response from it is #12's job.
     status: str = STATUS_ANSWERED
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[WarningDraft] = field(default_factory=list)
     citations: list[CitationDraft] = field(default_factory=list)
 
 
@@ -211,7 +219,9 @@ def escalate_status(current_status: str, candidate_status: str) -> str:
 def _register_builtin_steps() -> None:
     """Import built-in step modules so their decorators populate STEPS."""
     importlib.import_module("app.rag.steps.cite")
+    importlib.import_module("app.rag.steps.contradiction_check")
     importlib.import_module("app.rag.steps.ground_check")
+    importlib.import_module("app.rag.steps.stale_warning")
 
 
 _register_builtin_steps()
