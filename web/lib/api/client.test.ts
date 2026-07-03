@@ -51,6 +51,25 @@ describe("apiRequest", () => {
     await expect(apiRequest("/chat")).rejects.toThrow(/500/);
   });
 
+  it("joins FastAPI 422 validation errors (array-shaped detail) into one message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        mockResponse(422, {
+          detail: [
+            { loc: ["body", "title"], msg: "field required", type: "missing" },
+            { loc: ["body", "content"], msg: "string too short", type: "too_short" },
+          ],
+        }),
+      ),
+    );
+
+    await expect(apiRequest("/documents")).rejects.toMatchObject({
+      status: 422,
+      message: "field required / string too short",
+    });
+  });
+
   it("surfaces network failures as a user-readable ApiRequestError", async () => {
     vi.stubGlobal(
       "fetch",
@@ -94,6 +113,29 @@ describe("apiGet / apiPost", () => {
         method: "POST",
         body: JSON.stringify({ query: "hi" }),
       }),
+    );
+  });
+});
+
+describe("base URL normalization", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("strips a trailing slash from NEXT_PUBLIC_API_BASE_URL to avoid a double slash", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://api.example.com/");
+    vi.resetModules();
+    const { apiGet: apiGetWithTrailingSlashBase } = await import("./client");
+
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiGetWithTrailingSlashBase("/chat");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/chat",
+      expect.anything(),
     );
   });
 });

@@ -2,8 +2,16 @@ import type { ApiError } from "@/types/api";
 
 // Falls back to the local docker-compose api service (see docker-compose.yml,
 // port 8000) when the env var isn't set, e.g. when running `next dev` alone.
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+// Trailing slash is stripped so `buildUrl` can join it with a leading-slash
+// path unambiguously (a base URL with a trailing slash, e.g. set by ops as
+// "https://api.example.com/", would otherwise produce a double slash).
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+).replace(/\/+$/, "");
+
+function buildUrl(path: string): string {
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 // Thrown by apiRequest() for both non-2xx HTTP responses and network-level
 // failures, so every caller can catch a single error type and show the user
@@ -39,7 +47,7 @@ export async function apiRequest<T>(
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(buildUrl(path), {
       method,
       headers: {
         "Content-Type": "application/json",
@@ -98,11 +106,24 @@ async function parseBody(response: Response): Promise<unknown> {
 }
 
 // Best-effort extraction of a human-readable message from a backend error
-// payload. FastAPI's default error shape is {"detail": string | object}.
+// payload. FastAPI's default error shape is {"detail": string | object}, but
+// request-validation failures (422) shape `detail` as an array of
+// {loc, msg, type} objects instead of a plain string, so that case is joined
+// into one readable line rather than falling through to a generic message.
 function extractErrorMessage(body: unknown): string | null {
   if (body && typeof body === "object" && "detail" in body) {
     const detail = (body as { detail: unknown }).detail;
     if (typeof detail === "string" && detail.length > 0) return detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      const messages = detail
+        .map((item) =>
+          item && typeof item === "object" && "msg" in item
+            ? String((item as { msg: unknown }).msg)
+            : null,
+        )
+        .filter((msg): msg is string => Boolean(msg));
+      if (messages.length > 0) return messages.join(" / ");
+    }
   }
   if (typeof body === "string" && body.length > 0) return body;
   return null;
