@@ -93,4 +93,39 @@ describe("ChatContainer", () => {
       "回答の取得に失敗しました",
     );
   });
+
+  it("renders citations from the chat response", async () => {
+    vi.mocked(getTenantConfig).mockResolvedValue(sampleConfig);
+    vi.mocked(sendChatMessage).mockResolvedValue({
+      answer: "請求処理は月末締めです。",
+      citations: [
+        {
+          chunk_id: 1,
+          document_id: 2,
+          title: "請求処理FAQ",
+          snippet: "請求処理は月末締めです。",
+          source_uri: "https://example.test/billing",
+          source_updated_at: "2026-01-02T00:00:00Z",
+        },
+      ],
+      status: "answered",
+      warnings: [],
+    });
+
+    render(
+      <TenantConfigProvider>
+        <ChatContainer />
+      </TenantConfigProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "東雲ビジネスサポート" });
+    fireEvent.change(screen.getByLabelText("質問"), {
+      target: { value: "請求処理" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "送信" }));
+
+    expect(await screen.findByLabelText("引用")).toBeTruthy();
+    expect(screen.getByLabelText("引用").textContent).toContain("請求処理FAQ");
+    expect(screen.getByLabelText("引用").textContent).toContain("2026-01-02");
+  });
 });

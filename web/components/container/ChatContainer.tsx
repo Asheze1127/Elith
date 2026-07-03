@@ -5,6 +5,7 @@ import { useChat } from "@/hooks/useChat";
 import { useTenantConfig } from "@/hooks/useTenantConfig";
 import { AnswerMessage } from "@/components/presentational/AnswerMessage";
 import { ChatComposer } from "@/components/presentational/ChatComposer";
+import { CitationPanel } from "@/components/presentational/CitationPanel";
 
 export function ChatContainer() {
   const { config, isLoading, error: configError } = useTenantConfig();
@@ -57,7 +58,18 @@ export function ChatContainer() {
             {chatError}
           </p>
         ) : null}
-        {response ? <AnswerMessage response={response} /> : null}
+        {response ? (
+          <>
+            <AnswerMessage response={response} />
+            {config.answer.citation === "required" ||
+            response.citations.length > 0 ? (
+              <CitationPanel
+                citations={response.citations}
+                showSourceMetadata={config.answer.show_source_metadata}
+              />
+            ) : null}
+          </>
+        ) : null}
       </div>
     </main>
   );
