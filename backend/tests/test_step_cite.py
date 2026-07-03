@@ -128,14 +128,32 @@ def test_cite_not_required_with_no_chunks_does_not_force_status() -> None:
     assert result_malformed.status == STATUS_ANSWERED
 
 
-def test_cite_does_not_clobber_status_already_set_by_earlier_step() -> None:
-    # cite must not overturn a status a previous step already changed away
-    # from the untouched default -- see cite.py's module docstring.
+def test_cite_never_loosens_an_already_worse_status() -> None:
+    # cite must never loosen a status a previous step already set to
+    # something worse than its own candidate (escalate_status's "tighten
+    # only" rule, shared with ground_check -- see cite.py's module
+    # docstring). STATUS_NO_DATA is already the most severe outcome, so
+    # cite's own zero-chunks/citation-required candidate (also NO_DATA)
+    # must leave it exactly as-is, not "reset" it.
+    state = PipelineState(chunks=[], status=STATUS_NO_DATA)
+
+    result = cite(state, {"answer": {"citation": "required"}})
+
+    assert result.status == STATUS_NO_DATA
+
+
+def test_cite_tightens_a_less_severe_status_to_no_data() -> None:
+    # Escalation must go the other way too: a prior step's STATUS_NEEDS_REVIEW
+    # is LESS severe than what cite would independently conclude (zero chunks
+    # + citation required -> STATUS_NO_DATA), so cite must tighten it up to
+    # NO_DATA rather than leaving the weaker verdict in place -- this is the
+    # "escalate_status is symmetric with ground_check" guarantee the shared
+    # helper exists to provide (see cite.py's module docstring).
     state = PipelineState(chunks=[], status=STATUS_NEEDS_REVIEW)
 
     result = cite(state, {"answer": {"citation": "required"}})
 
-    assert result.status == STATUS_NEEDS_REVIEW
+    assert result.status == STATUS_NO_DATA
 
 
 def test_cite_produces_one_citation_per_chunk_in_order(db_session, make_tenant) -> None:

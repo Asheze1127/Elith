@@ -58,11 +58,11 @@ pipeline order is tenant_config data, not fixed (multi-tenant-design.md §3),
 so ``ground_check`` cannot assume it runs first or last. This step must never
 overwrite a worse status with a better one just because its own, narrower
 chunk-count signal looks fine in isolation -- it may only *tighten* (move
-``status`` toward worse), never loosen. ``_STATUS_SEVERITY`` ranks the three
-known constants from best to worst; a status this step doesn't recognize (the
-status vocabulary is tenant-config data, not a DB enum -- see
-``app.models.answer``'s module docstring) is treated as already maximally
-severe, so this step never "improves" a status it doesn't understand either.
+``status`` toward worse), never loosen. This uses ``app.rag.steps.escalate_status``,
+the same tighten-only helper ``cite`` (#10) uses -- both steps independently
+arrived at a "never loosen" rule in review, with two different mechanisms;
+they were unified into one shared helper so a future third status-setting
+step (e.g. #18/#19) can't diverge from either by accident.
 
 Exceptions
 ----------
@@ -80,23 +80,11 @@ from __future__ import annotations
 import dataclasses
 
 from app.models.answer import STATUS_ANSWERED, STATUS_NEEDS_REVIEW, STATUS_NO_DATA
-from app.rag.steps import PipelineState, register_step
+from app.rag.steps import PipelineState, escalate_status, register_step
 
 # See "Threshold reasoning" above: 2 is the smallest number that expresses
 # "more than one lonely, uncorroborated match".
 MIN_GROUNDING_CHUNKS = 2
-
-# Best -> worst. Used to enforce "tighten only, never loosen": this step must
-# not replace a worse status a prior step already set with a better one.
-_STATUS_SEVERITY = {
-    STATUS_ANSWERED: 0,
-    STATUS_NEEDS_REVIEW: 1,
-    STATUS_NO_DATA: 2,
-}
-
-# An unrecognized status is presumed at least as severe as the worst known
-# one, so this step never "improves" a status it doesn't understand.
-_UNKNOWN_STATUS_SEVERITY = _STATUS_SEVERITY[STATUS_NO_DATA]
 
 
 @register_step("ground_check")
@@ -137,18 +125,4 @@ def ground_check(state: PipelineState, config: dict) -> PipelineState:
         # Enough chunks: this step has no signal to make the outcome worse.
         candidate_status = STATUS_ANSWERED
 
-    current_severity = _STATUS_SEVERITY.get(state.status, _UNKNOWN_STATUS_SEVERITY)
-    # candidate_status may be a value this module doesn't recognize (a tenant
-    # can set low_confidence_action to any string); treat an unrecognized
-    # candidate as at least STATUS_NEEDS_REVIEW's severity rather than
-    # silently skipping it as "no signal" -- the tenant explicitly configured
-    # it to fire on weak grounding, so it must never be a no-op.
-    candidate_severity = _STATUS_SEVERITY.get(
-        candidate_status, _STATUS_SEVERITY[STATUS_NEEDS_REVIEW]
-    )
-    if candidate_severity <= current_severity:
-        # Tighten-only: never loosen a status a prior step already set worse
-        # (including a no-op where the candidate matches the current status).
-        return state
-
-    return dataclasses.replace(state, status=candidate_status)
+    return dataclasses.replace(state, status=escalate_status(state.status, candidate_status))

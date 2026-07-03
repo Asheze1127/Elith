@@ -28,13 +28,13 @@ import dataclasses
 
 import pytest
 
-from app.models.answer import STATUS_ANSWERED, STATUS_NEEDS_REVIEW
+from app.models.answer import STATUS_ANSWERED, STATUS_NEEDS_REVIEW, STATUS_NO_DATA
 from app.models.chunk import Chunk
 from app.models.document import Document
 from app.providers import get_embedding_provider
 from app.providers.base import LLMProvider
 from app.rag.pipeline import LLMProviderError, PipelineResult, UnknownStepError, run_pipeline
-from app.rag.steps import STEPS, CitationDraft, PipelineState, register_step
+from app.rag.steps import STEPS, CitationDraft, PipelineState, escalate_status, register_step
 
 
 def _reverse_order(state: PipelineState, config: dict) -> PipelineState:
@@ -262,3 +262,43 @@ def test_register_step_raises_on_duplicate_name() -> None:
     # documented behavior, previously never actually asserted).
     with pytest.raises(ValueError, match="_test_reverse_order"):
         register_step("_test_reverse_order")(_reverse_order)
+
+
+# --- escalate_status: the shared "tighten only, never loosen" helper -------
+# Extracted after review found cite (#10) and ground_check (#11) had each
+# independently invented a slightly different escalation rule; these tests
+# cover the unified helper both steps (and future #18/#19) now share.
+
+
+@pytest.mark.parametrize(
+    ("current", "candidate", "expected"),
+    [
+        # A strictly more severe candidate wins.
+        (STATUS_ANSWERED, STATUS_NEEDS_REVIEW, STATUS_NEEDS_REVIEW),
+        (STATUS_ANSWERED, STATUS_NO_DATA, STATUS_NO_DATA),
+        (STATUS_NEEDS_REVIEW, STATUS_NO_DATA, STATUS_NO_DATA),
+        # Equal or less severe candidates never loosen the current status.
+        (STATUS_NO_DATA, STATUS_NEEDS_REVIEW, STATUS_NO_DATA),
+        (STATUS_NO_DATA, STATUS_ANSWERED, STATUS_NO_DATA),
+        (STATUS_NEEDS_REVIEW, STATUS_ANSWERED, STATUS_NEEDS_REVIEW),
+        (STATUS_NEEDS_REVIEW, STATUS_NEEDS_REVIEW, STATUS_NEEDS_REVIEW),
+    ],
+)
+def test_escalate_status_tightens_but_never_loosens(current, candidate, expected) -> None:
+    assert escalate_status(current, candidate) == expected
+
+
+def test_escalate_status_treats_unrecognized_current_as_maximally_severe() -> None:
+    # A status this module doesn't recognize (tenant-config data, not a DB
+    # enum) must never be "improved" by a known candidate.
+    assert escalate_status("some_bespoke_status", STATUS_NO_DATA) == "some_bespoke_status"
+    assert escalate_status("some_bespoke_status", STATUS_ANSWERED) == "some_bespoke_status"
+
+
+def test_escalate_status_treats_unrecognized_candidate_as_at_least_needs_review() -> None:
+    # An unrecognized candidate (e.g. a tenant's own answer.low_confidence_action
+    # value) must never be silently ignored as "no signal" -- it is treated as
+    # at least STATUS_NEEDS_REVIEW's severity, so it still escalates from the
+    # default, but does not override an already-worse known status.
+    assert escalate_status(STATUS_ANSWERED, "escalate_to_human") == "escalate_to_human"
+    assert escalate_status(STATUS_NO_DATA, "escalate_to_human") == STATUS_NO_DATA

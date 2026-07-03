@@ -68,7 +68,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from app.models.answer import STATUS_ANSWERED
+from app.models.answer import STATUS_ANSWERED, STATUS_NEEDS_REVIEW, STATUS_NO_DATA
 from app.models.chunk import Chunk
 
 
@@ -163,3 +163,45 @@ def register_step(name: str) -> Callable[[StepFn], StepFn]:
         return fn
 
     return _decorator
+
+
+# Best -> worst. Shared by every step that can set ``PipelineState.status``
+# (currently ``cite`` and ``ground_check``; ``stale_warning``/
+# ``contradiction_check`` #18/#19 will likely join them) so they all agree on
+# one "tighten only, never loosen" ordering rather than each inventing its
+# own comparison (the two original implementations independently converged on
+# slightly different rules -- an equality-from-default check vs. a severity
+# ranking -- which review found could, in principle, diverge by pipeline
+# order once a third status-setting step existed; unifying here removes that
+# risk for good).
+_STATUS_SEVERITY = {
+    STATUS_ANSWERED: 0,
+    STATUS_NEEDS_REVIEW: 1,
+    STATUS_NO_DATA: 2,
+}
+
+
+def escalate_status(current_status: str, candidate_status: str) -> str:
+    """Return whichever of ``current_status``/``candidate_status`` is more severe.
+
+    Never loosens: if ``candidate_status`` is not strictly more severe than
+    ``current_status``, ``current_status`` is returned unchanged (including
+    when they're equal). A status string this module doesn't recognize can
+    appear on either side, since the status vocabulary is tenant-config data,
+    not a DB enum (``app.models.answer``'s module docstring):
+
+    - An unrecognized ``current_status`` is treated as maximally severe, so a
+      step never "improves" a status set by something it doesn't understand
+      (e.g. a future bespoke policy's own status string).
+    - An unrecognized ``candidate_status`` (e.g. a tenant's own
+      ``answer.low_confidence_action`` value that isn't one of the three
+      built-in constants) is treated as at least ``STATUS_NEEDS_REVIEW``'s
+      severity, never as "no signal" -- a step that explicitly proposes a
+      status change must never be silently ignored just because this module
+      doesn't recognize the string.
+    """
+    current_severity = _STATUS_SEVERITY.get(current_status, _STATUS_SEVERITY[STATUS_NO_DATA])
+    candidate_severity = _STATUS_SEVERITY.get(
+        candidate_status, _STATUS_SEVERITY[STATUS_NEEDS_REVIEW]
+    )
+    return candidate_status if candidate_severity > current_severity else current_status

@@ -62,9 +62,11 @@ Because ``config["pipeline"]`` is data and this step is not guaranteed to run
 last (or first, or at all alongside any particular other step), it must not
 clobber a status a different step already changed away from the untouched
 default ``STATUS_ANSWERED`` -- doing so could silently overturn e.g.
-``ground_check``'s own determination about the same answer. So this step
-only escalates to ``STATUS_NO_DATA`` when the incoming status is still that
-default; otherwise it leaves whatever an earlier step decided alone.
+``ground_check``'s own determination about the same answer. This step uses
+``app.rag.steps.escalate_status``, the same tighten-only helper ``ground_check``
+(#11) uses, so the two steps agree on one ordering regardless of which runs
+first (both independently arrived at a "never loosen" rule in review, with
+two different mechanisms; they were unified into one shared helper).
 
 Zero chunks with citation NOT required is not an error either
 (process-flow.md §5.2: "no data found" is a normal, user-facing outcome) --
@@ -77,8 +79,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
-from app.models.answer import STATUS_ANSWERED, STATUS_NO_DATA
-from app.rag.steps import CitationDraft, PipelineState, register_step
+from app.models.answer import STATUS_NO_DATA
+from app.rag.steps import CitationDraft, PipelineState, escalate_status, register_step
 
 # A citation snippet is a short preview, not the full passage -- chunks can be
 # several paragraphs long, and re-inlining the whole body next to the answer
@@ -120,16 +122,14 @@ def cite(state: PipelineState, config: dict[str, Any]) -> PipelineState:
         for chunk in state.chunks
     ]
 
-    status = state.status
-    if citation_required and not state.chunks and state.status == STATUS_ANSWERED:
-        # Second line of defense (see module docstring): nothing to cite under
-        # a required-citation policy, and no earlier step has already flagged
-        # this answer -- surface it structurally rather than letting a
-        # generated answer look like a confident, grounded one.
-        status = STATUS_NO_DATA
+    # Second line of defense (see module docstring): nothing to cite under a
+    # required-citation policy -- propose STATUS_NO_DATA, but escalate_status
+    # only actually applies it if that's more severe than whatever status is
+    # already there (e.g. leaves an earlier step's own worse verdict alone).
+    candidate_status = STATUS_NO_DATA if (citation_required and not state.chunks) else state.status
 
     return dataclasses.replace(
         state,
-        status=status,
+        status=escalate_status(state.status, candidate_status),
         citations=[*state.citations, *new_drafts],
     )
