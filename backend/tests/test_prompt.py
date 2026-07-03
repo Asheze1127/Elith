@@ -91,3 +91,26 @@ def test_build_prompt_includes_query_and_numbered_context() -> None:
     assert "my question" in prompt
     assert "[1] first passage" in prompt
     assert "[2] second passage" in prompt
+
+
+def test_build_prompt_tolerates_non_dict_answer_section() -> None:
+    # tenant_config.config is unvalidated JSONB -- a mis-seeded row like this
+    # (answer should be a dict, e.g. {"default_mode": "external"}) must not
+    # raise a raw AttributeError; it should fall back to the default policy.
+    chunks = [_chunk("some content")]
+
+    prompt = build_prompt({"answer": "external"}, chunks, "a question")
+
+    assert "Mode: internal" in prompt  # falls back to the documented default
+
+
+def test_build_prompt_tolerates_non_dict_category_policies() -> None:
+    # Same defensive-shape guarantee for category_policies: a list instead of
+    # a dict keyed by category must not raise, and contributes no category
+    # instructions since it can't be interpreted as one.
+    chunks = [_chunk("some content")]
+
+    prompt = build_prompt({"category_policies": ["contract"]}, chunks, "a question")
+
+    assert "a human must confirm the answer" not in prompt
+    assert "respond in a" not in prompt

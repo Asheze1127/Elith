@@ -16,6 +16,19 @@ category itself, it emits a conditional instruction per configured category
 category_policies reflection squarely a prompt-text concern, matching the
 issue's framing that there is no dedicated "mode step" / "category step" in
 the pipeline -- mode and category_policies are reflected here, not as steps.
+
+Defensive shape handling: ``tenant_config.config`` is unvalidated JSONB (no
+Pydantic schema anywhere in this repo yet), so a mis-seeded row -- e.g.
+``{"answer": "external"}`` instead of ``{"answer": {"default_mode": ...}}``,
+or ``{"category_policies": ["contract"]}`` instead of a dict keyed by
+category -- is a realistic, if rare, scenario. Every nested container this
+function reads (``config["answer"]``, ``config["category_policies"]``, and
+each individual category's policy value) is guarded with the same rule: if
+it isn't the dict shape we expect, treat it as absent/empty rather than
+raising a raw ``AttributeError`` up through ``run_pipeline`` (the DoD
+requires a clear, user-facing message on the exception path, not a stack
+trace -- and there is nothing more useful this function itself could do with
+a shape violation it cannot attribute to a specific tenant action).
 """
 
 from __future__ import annotations
@@ -23,6 +36,15 @@ from __future__ import annotations
 from typing import Any
 
 from app.models.chunk import Chunk
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    """Return ``value`` if it's a dict, else an empty dict.
+
+    Shared guard for every tenant_config sub-section build_prompt reads --
+    see the module docstring's "Defensive shape handling" note.
+    """
+    return value if isinstance(value, dict) else {}
 
 
 def build_prompt(config: dict[str, Any], chunks: list[Chunk], query: str) -> str:
@@ -46,10 +68,10 @@ def build_prompt(config: dict[str, Any], chunks: list[Chunk], query: str) -> str
     formatting is applied (that is #10's job) -- numbering here only gives the
     model a stable way to refer back to a passage if it chooses to.
     """
-    answer_cfg = config.get("answer", {})
+    answer_cfg = _as_dict(config.get("answer"))
     mode = answer_cfg.get("default_mode", "internal")
     citation_required = answer_cfg.get("citation") == "required"
-    category_policies = config.get("category_policies", {})
+    category_policies = _as_dict(config.get("category_policies"))
 
     lines: list[str] = [
         "You are a RAG assistant. Answer the user's question using only the "

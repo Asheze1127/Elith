@@ -4,28 +4,36 @@ directory.md §3 places the pipeline's named parts here (``app/rag/steps/``),
 one module per step (``stale_warning.py`` / ``contradiction_check.py`` /
 ``ground_check.py`` / ``cite.py``). None of those exist yet -- #10, #11, #18,
 #19 each add exactly one of them and register it with ``@register_step(...)``
-below. This module defines only the mechanism (the registry + decorator) that
-those future modules will conform to; it intentionally contains no step logic
-of its own (see the issue's "what NOT to build" list).
+below. This module defines only the mechanism (the registry + decorator +
+the state object threaded through steps) that those future modules will
+conform to; it intentionally contains no step logic of its own (see the
+issue's "what NOT to build" list).
 
 Step contract
 -------------
 A step is any callable matching ``StepFn``::
 
-    def my_step(chunks: list[Chunk], config: dict[str, Any]) -> list[Chunk]:
+    def my_step(state: PipelineState, config: dict[str, Any]) -> PipelineState:
         ...
 
-- ``chunks``: the chunks produced so far -- either straight from
-  ``app.rag.retrieve.retrieve()`` (if this is the first step) or whatever the
-  previous step in ``config["pipeline"]`` returned.
+- ``state``: a ``PipelineState`` carrying everything produced so far -- the
+  chunks (either straight from ``app.rag.retrieve.retrieve()``, if this is
+  the first step, or whatever the previous step returned), plus the
+  answer-level ``status``/``warnings``/``citations`` accumulated by any
+  earlier step. (This widened from a bare ``list[Chunk]`` after review of the
+  first version of this contract -- see ``PipelineState``'s docstring for
+  why chunks alone can't carry what #10/#11 need.)
 - ``config``: the full tenant_config JSONB dict (multi-tenant-design.md §3),
   e.g. a step reads ``config["warnings"]["stale_sources"]`` for its own
   on/off flag. A step must treat this as read-only.
-- returns: the chunks to hand to the next step (or, for the last step, to
-  ``app.rag.prompt.build_prompt``). A step should return a new list rather
-  than mutating its input in place, so the orchestrator's running variable in
-  ``app.rag.pipeline.run_pipeline`` remains the single source of truth for
-  "what has happened so far."
+- returns: a ``PipelineState`` to hand to the next step (or, for the last
+  step, to ``app.rag.pipeline.run_pipeline``'s prompt-building/generate
+  phase). A step must return a NEW ``PipelineState`` (e.g. via
+  ``dataclasses.replace``) rather than mutating its input in place, so the
+  orchestrator's running variable in ``run_pipeline`` remains the single
+  source of truth for "what has happened so far." This applies to every
+  field, not just ``chunks`` -- e.g. append to a *copy* of
+  ``state.warnings``, don't call ``state.warnings.append(...)``.
 - may raise: any exception. This package deliberately does not impose a
   shared step-level exception type -- #10/#11/#18/#19's steps may have very
   different failure modes -- but a step that can fail in a user-relevant way
@@ -56,14 +64,79 @@ exists, but that call belongs to whoever adds the first bespoke policy.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
+from app.models.answer import STATUS_ANSWERED
 from app.models.chunk import Chunk
 
-# A pipeline step: takes the chunks produced so far plus the full tenant
-# config, returns the chunks to pass on. See the module docstring for the
-# full contract (read-only config, no in-place mutation, own exception types).
-StepFn = Callable[[list[Chunk], dict[str, Any]], list[Chunk]]
+
+@dataclass
+class CitationDraft:
+    """A citation candidate produced by a step, before persistence (#12).
+
+    Mirrors the fields of ``app.models.citation.Citation`` that matter before
+    an ``answer_id`` exists -- that FK is only assigned once #12 persists the
+    ``Answer`` row, so this is deliberately NOT the ORM model. A step (``cite``,
+    most likely, #10) builds these in memory from whatever chunk/document it
+    is citing; #12 later turns each draft into a real ``Citation`` row
+    attached to the persisted ``Answer``.
+    """
+
+    chunk_id: int | None = None
+    document_id: int | None = None
+    snippet: str | None = None
+    source_uri: str | None = None
+    source_updated_at: datetime | None = None
+
+
+@dataclass
+class PipelineState:
+    """State threaded through pipeline steps and back to ``run_pipeline``.
+
+    The original version of this contract passed a bare ``list[Chunk]``
+    between steps. Review of #10 (``cite``) and #11 (``ground_check``)'s
+    actual needs showed that's insufficient:
+
+    - ``ground_check`` must be able to set an answer-level ``status`` (see
+      ``app.models.answer.STATUS_*``) even when ``chunks`` is EMPTY -- "no
+      grounding chunks" / "weak grounding" is exactly the case that should
+      produce ``STATUS_NEEDS_REVIEW``, and there is no chunk to attach that
+      to in that scenario.
+    - ``cite`` must produce citation data that isn't a ``Chunk`` field
+      (``snippet``/``source_uri``/etc., see ``CitationDraft`` above).
+    - ``stale_warning`` / ``contradiction_check`` (#18/#19) need to append
+      warnings that also aren't chunk-scoped (e.g. "source X is stale" isn't
+      a property of any single returned chunk once several were merged).
+
+    Steps receive and return this whole object so those answer-level outputs
+    have a defined home, without smuggling state onto ``Chunk`` (a persisted
+    SQLAlchemy model -- attributes set on it in memory would not survive a
+    ``refresh()``, and per-chunk state is the wrong shape for an answer-level
+    fact anyway) and without ever making ``config`` mutable (it stays
+    strictly read-only; steps only ever read from it).
+
+    Convention: a step must return a NEW ``PipelineState`` (e.g. via
+    ``dataclasses.replace(state, ...)``), never mutate ``state`` in place --
+    including its list fields (``chunks``/``warnings``/``citations``): build
+    a new list rather than calling ``.append()`` on the one you received.
+    """
+
+    chunks: list[Chunk]
+    # "Nothing has gone wrong yet" starting point; a step may downgrade this
+    # (e.g. to STATUS_NEEDS_REVIEW) but this module does not interpret the
+    # value itself -- assembling the final /chat response from it is #12's job.
+    status: str = STATUS_ANSWERED
+    warnings: list[str] = field(default_factory=list)
+    citations: list[CitationDraft] = field(default_factory=list)
+
+
+# A pipeline step: takes the running PipelineState plus the full tenant
+# config, returns the (new) PipelineState to pass on. See the module
+# docstring for the full contract (read-only config, no in-place mutation,
+# own exception types).
+StepFn = Callable[[PipelineState, dict[str, Any]], PipelineState]
 
 # The shared step catalog. Keys are the names tenant_config.pipeline entries
 # name (multi-tenant-design.md §3); populated by each step module's
@@ -77,7 +150,7 @@ def register_step(name: str) -> Callable[[StepFn], StepFn]:
     Usage (in a future step module, e.g. app/rag/steps/cite.py)::
 
         @register_step("cite")
-        def cite(chunks: list[Chunk], config: dict[str, Any]) -> list[Chunk]:
+        def cite(state: PipelineState, config: dict[str, Any]) -> PipelineState:
             ...
 
     Raises ``ValueError`` if ``name`` is already registered.
