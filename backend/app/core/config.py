@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "local"
     # SQLAlchemy URL using the postgresql+psycopg dialect (matches docker-compose db)
     DATABASE_URL: str = "postgresql+psycopg://elith:elith@db:5432/elith"
+    # Gemini free-tier API key. Empty default keeps the app bootable without secrets;
+    # when empty the provider factory falls back to the deterministic mock.
+    GEMINI_API_KEY: str = ""
     LOG_LEVEL: str = "INFO"
 
     model_config = SettingsConfigDict(

@@ -18,8 +18,12 @@ dependencies = [
     "alembic",
     "psycopg[binary]",
     "pgvector",
-    # multipart is required by FastAPI for future file-upload endpoints (#4 documents)
+    # multipart is required by FastAPI for future file-upload endpoints (documents ingestion)
     "python-multipart",
+    # Gemini free-tier LLM/Embedding SDK, used only behind the provider abstraction.
+    # Pinned to <0.9: this SDK is deprecated (EOL); pinning avoids surprise breakage
+    # until migration to the successor google-genai (tracked in a separate issue).
+    "google-generativeai>=0.8,<0.9",
 ]
 
 [project.optional-dependencies]
