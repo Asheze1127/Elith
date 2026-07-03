@@ -49,3 +49,14 @@ extend-exclude = ["migrations/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B"]
+
+# FastAPI's `Depends(...)` (and friends) as a default argument is the
+# framework's idiomatic dependency-injection pattern, not the mutable-default
+# footgun B008 targets -- allowlist it instead of littering call sites with
+# per-line noqa (first Depends() usage lands with #6, GET /tenant/config).
+# (#7/#8 independently added a narrower app/api/*.py per-file-ignore for the
+# same purpose; superseded by this allowlist when the branches merged -- it
+# is strictly more precise since it doesn't blanket-disable B008 for
+# non-FastAPI mutable-default bugs elsewhere in app/api/.)
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query"]

@@ -1,10 +1,13 @@
 """Chunk: a slice of a document plus its embedding vector.
 
 The embedding column uses pgvector. Retrieval does a tenant-scoped nearest-
-neighbor search over ``embedding`` (tech-stack.md §4). An ANN index
-(ivfflat / hnsw) can be added later once data volume warrants it; it is left
-out of the initial migration on purpose (index choice/params depend on row
-count and distance op, and an empty-table index gives no benefit).
+neighbor search over ``embedding`` using cosine distance (tech-stack.md §4,
+app.rag.retrieve, settled in #8). An ANN index (ivfflat / hnsw, both of which
+support a cosine op class) can be added later once data volume warrants it;
+it is left out of the initial migration on purpose -- an index over a table
+this small (MVP-scale fixture/demo data) gives no benefit and an
+approximate-nearest-neighbor index would only add recall risk before there is
+data to tune it against.
 """
 
 from __future__ import annotations
