@@ -127,6 +127,49 @@ def test_retrieve_ignores_workspace_id_belonging_to_another_tenant(db_session, m
     assert results == []
 
 
+def test_retrieve_workspace_join_rejects_document_owned_by_another_tenant(
+    db_session, make_tenant
+) -> None:
+    """Defense-in-depth check for the Document.tenant_id condition in the
+    workspace-scoped join (retrieve.py), independent of the top-level
+    Chunk.tenant_id filter.
+
+    There is no DB-level constraint tying Chunk.tenant_id to its Document's
+    tenant_id (a documented, deliberate gap from #3's boundary design), so a
+    Chunk row inconsistent with its Document is a schema-permitted state, not
+    a hypothetical. This test constructs exactly that inconsistency directly
+    (bypassing the ingestion/#7 repository layer, which would normally
+    prevent it) to prove retrieve() would still refuse to leak the document
+    even if such a row existed: a chunk tagged tenant_id=A but attached to a
+    Document owned by tenant B must NOT come back for tenant A's
+    workspace-scoped query, because the join also requires
+    Document.tenant_id == tenant_id -- not just the workspace_id match.
+    """
+    tenant_a = make_tenant("Tenant A")
+    tenant_b = make_tenant("Tenant B")
+    workspace_b = Workspace(tenant_id=tenant_b.id, name="B's department")
+    db_session.add(workspace_b)
+    db_session.commit()
+    db_session.refresh(workspace_b)
+
+    provider = get_embedding_provider()
+    query = "generic scoped query"
+    vector = provider.embed_query(query)
+
+    # Document genuinely owned by tenant B, in B's workspace.
+    document_b = Document(tenant_id=tenant_b.id, workspace_id=workspace_b.id, title="B doc")
+    # Inconsistent chunk: tagged as tenant A's, but attached to B's document.
+    # Schema-permitted (no composite FK enforces this), so retrieve() alone
+    # must be the safeguard.
+    document_b.chunks = [Chunk(tenant_id=tenant_a.id, content="B content", embedding=vector)]
+    db_session.add(document_b)
+    db_session.commit()
+
+    results = retrieve(db_session, tenant_id=tenant_a.id, query=query, workspace_id=workspace_b.id)
+
+    assert results == []
+
+
 def test_retrieve_never_returns_another_tenants_chunks_when_tenant_has_no_data(
     db_session, make_tenant
 ) -> None:
