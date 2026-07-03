@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     Defaults keep the app importable/bootable without a live DB or secrets.
     """
 
-    # local -> Gemini free API / no key -> mock (provider selection handled in #5)
+    # local -> Gemini free API / no key -> mock (provider selection handled in #4)
     ENVIRONMENT: str = "local"
     # SQLAlchemy URL using the postgresql+psycopg dialect (matches docker-compose db)
     DATABASE_URL: str = "postgresql+psycopg://elith:elith@db:5432/elith"
